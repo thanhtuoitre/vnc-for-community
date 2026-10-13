@@ -192,4 +192,33 @@ class VncProtocolTest {
         assertEquals(original.codec, deserialized.codec)
         assertArrayEquals(original.data, deserialized.data)
     }
+
+    @Test
+    fun testCursorPositionRoundtrip() {
+        val original = CursorPosition(1024, 768, true)
+        val serialized = VncProtocol.serializeCursorPosition(original)
+        assertEquals(9, serialized.size)
+
+        val deserialized = VncProtocol.deserializeCursorPosition(serialized)
+        assertEquals(original.x, deserialized.x)
+        assertEquals(original.y, deserialized.y)
+        assertEquals(original.visible, deserialized.visible)
+    }
+
+    @Test
+    fun testCursorShapeRoundtrip() {
+        val dummyPng = byteArrayOf(0x89.toByte(), 0x50.toByte(), 0x4E.toByte(), 0x47.toByte(), 0x01, 0x02)
+        val original = CursorShape(32, 32, 4, 10, 1.toByte(), dummyPng)
+        val serialized = VncProtocol.serializeCursorShape(original)
+        assertEquals(17 + dummyPng.size, serialized.size)
+
+        val deserialized = VncProtocol.deserializeCursorShape(serialized)
+        assertEquals(original.width, deserialized.width)
+        assertEquals(original.height, deserialized.height)
+        assertEquals(original.hotspotX, deserialized.hotspotX)
+        assertEquals(original.hotspotY, deserialized.hotspotY)
+        assertEquals(original.format, deserialized.format)
+        assertArrayEquals(original.data, deserialized.data)
+    }
 }
+

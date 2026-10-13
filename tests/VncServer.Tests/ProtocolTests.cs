@@ -195,4 +195,33 @@ public class ProtocolTests
         Assert.Equal(original.Codec, deserialized.Codec);
         Assert.Equal(original.Data, deserialized.Data);
     }
+
+    [Fact]
+    public void CursorPosition_Roundtrip_Succeeds()
+    {
+        var original = new CursorPosition(1280, 720, true);
+        byte[] serialized = VncProtocol.SerializeCursorPosition(original);
+        var deserialized = VncProtocol.DeserializeCursorPosition(serialized);
+
+        Assert.Equal(original.X, deserialized.X);
+        Assert.Equal(original.Y, deserialized.Y);
+        Assert.Equal(original.Visible, deserialized.Visible);
+    }
+
+    [Fact]
+    public void CursorShape_Roundtrip_Succeeds()
+    {
+        byte[] pngData = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x01, 0x02, 0x03];
+        var original = new CursorShape(32, 32, 5, 8, 1, pngData);
+        byte[] serialized = VncProtocol.SerializeCursorShape(original);
+        var deserialized = VncProtocol.DeserializeCursorShape(serialized);
+
+        Assert.Equal(original.Width, deserialized.Width);
+        Assert.Equal(original.Height, deserialized.Height);
+        Assert.Equal(original.HotspotX, deserialized.HotspotX);
+        Assert.Equal(original.HotspotY, deserialized.HotspotY);
+        Assert.Equal(original.Format, deserialized.Format);
+        Assert.Equal(original.Data, deserialized.Data);
+    }
 }
+

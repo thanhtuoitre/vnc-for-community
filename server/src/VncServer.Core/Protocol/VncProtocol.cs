@@ -281,6 +281,54 @@ public static class VncProtocol
         return new AudioFrame(timestampMs, sampleRate, channels, codec, data);
     }
 
+    public static byte[] SerializeCursorPosition(CursorPosition pos)
+    {
+        byte[] buffer = new byte[9];
+        BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(0, 4), pos.X);
+        BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(4, 4), pos.Y);
+        buffer[8] = pos.Visible ? (byte)1 : (byte)0;
+        return buffer;
+    }
+
+    public static CursorPosition DeserializeCursorPosition(ReadOnlySpan<byte> payload)
+    {
+        if (payload.Length < 9)
+            throw new FormatException("CursorPosition payload too short");
+        int x = BinaryPrimitives.ReadInt32LittleEndian(payload[..4]);
+        int y = BinaryPrimitives.ReadInt32LittleEndian(payload.Slice(4, 4));
+        bool visible = payload[8] != 0;
+        return new CursorPosition(x, y, visible);
+    }
+
+    public static byte[] SerializeCursorShape(CursorShape shape)
+    {
+        const int metaLen = 17;
+        byte[] buffer = new byte[metaLen + shape.Data.Length];
+        var span = buffer.AsSpan();
+        BinaryPrimitives.WriteInt32LittleEndian(span[..4], shape.Width);
+        BinaryPrimitives.WriteInt32LittleEndian(span.Slice(4, 4), shape.Height);
+        BinaryPrimitives.WriteInt32LittleEndian(span.Slice(8, 4), shape.HotspotX);
+        BinaryPrimitives.WriteInt32LittleEndian(span.Slice(12, 4), shape.HotspotY);
+        span[16] = shape.Format;
+        shape.Data.CopyTo(span[17..]);
+        return buffer;
+    }
+
+    public static CursorShape DeserializeCursorShape(ReadOnlySpan<byte> payload)
+    {
+        const int metaLen = 17;
+        if (payload.Length < metaLen)
+            throw new FormatException("CursorShape payload too short");
+
+        int width = BinaryPrimitives.ReadInt32LittleEndian(payload[..4]);
+        int height = BinaryPrimitives.ReadInt32LittleEndian(payload.Slice(4, 4));
+        int hotspotX = BinaryPrimitives.ReadInt32LittleEndian(payload.Slice(8, 4));
+        int hotspotY = BinaryPrimitives.ReadInt32LittleEndian(payload.Slice(12, 4));
+        byte format = payload[16];
+        byte[] data = payload[metaLen..].ToArray();
+        return new CursorShape(width, height, hotspotX, hotspotY, format, data);
+    }
+
     public static byte[] GenerateChallenge(int length = 32)
     {
         byte[] challenge = new byte[length];

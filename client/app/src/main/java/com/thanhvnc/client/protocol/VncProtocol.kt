@@ -163,6 +163,49 @@ object VncProtocol {
         return AudioFrame(timestampMs, sampleRate, channels, codec, data)
     }
 
+    fun serializeCursorPosition(pos: CursorPosition): ByteArray {
+        val buf = ByteBuffer.allocate(9).order(ByteOrder.LITTLE_ENDIAN)
+        buf.putInt(pos.x)
+        buf.putInt(pos.y)
+        buf.put(if (pos.visible) 1.toByte() else 0.toByte())
+        return buf.array()
+    }
+
+    fun deserializeCursorPosition(payload: ByteArray): CursorPosition {
+        require(payload.size >= 9) { "CursorPosition payload too short" }
+        val buf = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
+        val x = buf.int
+        val y = buf.int
+        val visible = buf.get() != 0.toByte()
+        return CursorPosition(x, y, visible)
+    }
+
+    fun serializeCursorShape(shape: CursorShape): ByteArray {
+        val metaLen = 17
+        val buf = ByteBuffer.allocate(metaLen + shape.data.size).order(ByteOrder.LITTLE_ENDIAN)
+        buf.putInt(shape.width)
+        buf.putInt(shape.height)
+        buf.putInt(shape.hotspotX)
+        buf.putInt(shape.hotspotY)
+        buf.put(shape.format)
+        buf.put(shape.data)
+        return buf.array()
+    }
+
+    fun deserializeCursorShape(payload: ByteArray): CursorShape {
+        val metaLen = 17
+        require(payload.size >= metaLen) { "CursorShape payload too short" }
+        val buf = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
+        val width = buf.int
+        val height = buf.int
+        val hotspotX = buf.int
+        val hotspotY = buf.int
+        val format = buf.get()
+        val data = ByteArray(payload.size - metaLen)
+        buf.get(data)
+        return CursorShape(width, height, hotspotX, hotspotY, format, data)
+    }
+
     fun readExactly(stream: InputStream, buffer: ByteArray, length: Int) {
         var offset = 0
         while (offset < length) {

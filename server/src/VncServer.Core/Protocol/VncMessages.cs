@@ -15,7 +15,9 @@ public enum VncMessageType : byte
     Disconnect = 9,
     QualityControl = 10,
     ClipboardText = 11,
-    AudioFrame = 12
+    AudioFrame = 12,
+    CursorPosition = 13,
+    CursorShape = 14
 }
 
 [Flags]
@@ -73,3 +75,7 @@ public sealed record QualityControl(byte Quality, byte TargetFps);
 public sealed record ClipboardMessage(string Text);
 
 public sealed record AudioFrame(uint TimestampMs, ushort SampleRate, byte Channels, byte Codec, byte[] Data);
+ 
+public sealed record CursorPosition(int X, int Y, bool Visible);
+
+public sealed record CursorShape(int Width, int Height, int HotspotX, int HotspotY, byte Format, byte[] Data);

@@ -289,6 +289,14 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
+        <!-- RealVNC Remote Cursor Overlay -->
+        <com.thanhvnc.client.ui.CursorOverlayView
+            android:id="@+id/cursorOverlayView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clickable="false"
+            android:focusable="false" />
+
         <!-- Floating HUD Overlay Pill (Collapsible & Draggable) -->
         <LinearLayout
             android:id="@+id/overlayControlBar"

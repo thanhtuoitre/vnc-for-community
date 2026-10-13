@@ -18,6 +18,7 @@ public sealed class VncSession : IAsyncDisposable
     private readonly Action<string>? _log;
     private readonly Security.IpRateLimiter? _rateLimiter;
     private readonly CancellationTokenSource _sessionCts = new();
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
 
     public string RemoteEndPoint => _client.Client.RemoteEndPoint?.ToString() ?? "Unknown";
 
@@ -63,13 +64,15 @@ public sealed class VncSession : IAsyncDisposable
             var readTask = ProcessIncomingPacketsAsync(ct);
             var captureTask = ProduceFramesAsync(frameChannel.Writer, ct);
             var sendTask = ConsumeFramesAsync(frameChannel.Reader, ct);
+            var cursorTask = ProduceCursorUpdatesAsync(ct);
 
-            await Task.WhenAny(readTask, captureTask, sendTask).ConfigureAwait(false);
+            await Task.WhenAny(readTask, captureTask, sendTask, cursorTask).ConfigureAwait(false);
             _sessionCts.Cancel();
             await Task.WhenAll(
                 readTask.ContinueWith(_ => { }, TaskScheduler.Default),
                 captureTask.ContinueWith(_ => { }, TaskScheduler.Default),
-                sendTask.ContinueWith(_ => { }, TaskScheduler.Default)
+                sendTask.ContinueWith(_ => { }, TaskScheduler.Default),
+                cursorTask.ContinueWith(_ => { }, TaskScheduler.Default)
             ).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -217,17 +220,68 @@ public sealed class VncSession : IAsyncDisposable
         return (type, payload);
     }
 
+    private async Task ProduceCursorUpdatesAsync(CancellationToken ct)
+    {
+        IntPtr lastHCursor = (IntPtr)(-1);
+        int lastFbX = -1;
+        int lastFbY = -1;
+        bool? lastVisible = null;
+
+        while (!ct.IsCancellationRequested)
+        {
+            if (CursorCapture.GetCurrentCursor(out int screenX, out int screenY, out bool visible, out var hCursor))
+            {
+                int fbX = screenX - _capture.VirtualX;
+                int fbY = screenY - _capture.VirtualY;
+
+                // Send shape update if cursor handle changed or initial send
+                if (hCursor != lastHCursor)
+                {
+                    lastHCursor = hCursor;
+                    var shape = CursorCapture.CaptureShape(hCursor);
+                    if (shape != null)
+                    {
+                        byte[] shapePayload = VncProtocol.SerializeCursorShape(shape);
+                        await SendPacketAsync(VncMessageType.CursorShape, shapePayload, ct).ConfigureAwait(false);
+                    }
+                }
+
+                // Send position update if coordinates or visibility changed
+                if (fbX != lastFbX || fbY != lastFbY || visible != lastVisible)
+                {
+                    lastFbX = fbX;
+                    lastFbY = fbY;
+                    lastVisible = visible;
+                    var posMsg = new CursorPosition(fbX, fbY, visible);
+                    byte[] posPayload = VncProtocol.SerializeCursorPosition(posMsg);
+                    await SendPacketAsync(VncMessageType.CursorPosition, posPayload, ct).ConfigureAwait(false);
+                }
+            }
+
+            // ~60 Hz cursor tracking loop
+            await Task.Delay(16, ct).ConfigureAwait(false);
+        }
+    }
+
     private async Task SendPacketAsync(VncMessageType type, byte[] payload, CancellationToken ct)
     {
-        byte[] headerBuffer = new byte[VncProtocol.HeaderSize];
-        VncProtocol.WriteHeader(headerBuffer, type, payload.Length);
-
-        await _stream.WriteAsync(headerBuffer, ct).ConfigureAwait(false);
-        if (payload.Length > 0)
+        await _sendLock.WaitAsync(ct).ConfigureAwait(false);
+        try
         {
-            await _stream.WriteAsync(payload, ct).ConfigureAwait(false);
+            byte[] headerBuffer = new byte[VncProtocol.HeaderSize];
+            VncProtocol.WriteHeader(headerBuffer, type, payload.Length);
+
+            await _stream.WriteAsync(headerBuffer, ct).ConfigureAwait(false);
+            if (payload.Length > 0)
+            {
+                await _stream.WriteAsync(payload, ct).ConfigureAwait(false);
+            }
+            await _stream.FlushAsync(ct).ConfigureAwait(false);
         }
-        await _stream.FlushAsync(ct).ConfigureAwait(false);
+        finally
+        {
+            _sendLock.Release();
+        }
     }
 
     public async Task SendClipboardTextAsync(string text, CancellationToken ct = default)
@@ -241,8 +295,10 @@ public sealed class VncSession : IAsyncDisposable
     {
         _sessionCts.Cancel();
         _sessionCts.Dispose();
+        _sendLock.Dispose();
         _stream.Dispose();
         _client.Dispose();
         await Task.CompletedTask;
     }
 }
+

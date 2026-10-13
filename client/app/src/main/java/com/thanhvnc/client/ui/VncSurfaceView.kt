@@ -37,11 +37,15 @@ class VncSurfaceView @JvmOverloads constructor(
     var remoteHeight: Int = 1080
     var onMouseInput: ((MouseInput) -> Unit)? = null
     var onKeyboardInput: ((KeyboardInput) -> Unit)? = null
+    var onViewportChanged: ((RectF, Int, Int) -> Unit)? = null
+    var onLocalCursorMoved: ((Float, Float) -> Unit)? = null
 
     // Mouse Mode: Trackpad vs Direct Touch
     var isTrackpadMode: Boolean = false
-    private var cursorX: Float = 960f
-    private var cursorY: Float = 540f
+    var cursorX: Float = 960f
+        private set
+    var cursorY: Float = 540f
+        private set
 
     // Viewport scaling and Zoom & Pan
     var zoomScale: Float = 1.0f
@@ -49,20 +53,6 @@ class VncSurfaceView @JvmOverloads constructor(
     private var panOffsetX: Float = 0f
     private var panOffsetY: Float = 0f
     private var baseDstRect = RectF()
-
-    // Cursor rendering paints
-    private val cursorFillPaint = Paint().apply {
-        color = Color.WHITE
-        style = Paint.Style.FILL
-        isAntiAlias = true
-    }
-    private val cursorBorderPaint = Paint().apply {
-        color = Color.BLACK
-        style = Paint.Style.STROKE
-        strokeWidth = 2.5f
-        isAntiAlias = true
-    }
-    private val cursorPath = Path()
 
     // Input Coalescing
     private var lastSentMoveMs = 0L
@@ -102,6 +92,7 @@ class VncSurfaceView @JvmOverloads constructor(
                 panOffsetX = focusX - (focusX - panOffsetX) * scaleRatio
                 panOffsetY = focusY - (focusY - panOffsetY) * scaleRatio
                 clampPan()
+                notifyViewportChanged()
                 return true
             }
 
@@ -161,11 +152,15 @@ class VncSurfaceView @JvmOverloads constructor(
                             val dy = -distanceY * (remoteHeight.toFloat() / dRect.height()) * factor
                             cursorX = (cursorX + dx).coerceIn(0f, (remoteWidth - 1).toFloat())
                             cursorY = (cursorY + dy).coerceIn(0f, (remoteHeight - 1).toFloat())
+                            onLocalCursorMoved?.invoke(cursorX, cursorY)
                             coalesceMouseMove(cursorX.toInt(), cursorY.toInt())
                         }
                     } else {
                         // In Touch mode, single finger scroll moves mouse or pans if zoomed
                         val (rx, ry) = mapToRemote(e2.x, e2.y) ?: return false
+                        cursorX = rx.toFloat()
+                        cursorY = ry.toFloat()
+                        onLocalCursorMoved?.invoke(cursorX, cursorY)
                         coalesceMouseMove(rx, ry)
                     }
                     return true
@@ -227,15 +222,29 @@ class VncSurfaceView @JvmOverloads constructor(
     }
 
     fun submitFrame(frame: ScreenFrame) {
+        val sizeChanged = (remoteWidth != frame.width || remoteHeight != frame.height)
         remoteWidth = frame.width
         remoteHeight = frame.height
         latestFrame.set(frame)
+        if (sizeChanged) {
+            post { notifyViewportChanged() }
+        }
     }
 
     fun resetView() {
         zoomScale = 1.0f
         panOffsetX = 0f
         panOffsetY = 0f
+        notifyViewportChanged()
+    }
+
+    fun setLocalCursorPosition(x: Float, y: Float) {
+        cursorX = x.coerceIn(0f, (remoteWidth - 1).coerceAtLeast(1).toFloat())
+        cursorY = y.coerceIn(0f, (remoteHeight - 1).coerceAtLeast(1).toFloat())
+    }
+
+    fun notifyViewportChanged() {
+        onViewportChanged?.invoke(getDisplayRect(), remoteWidth, remoteHeight)
     }
 
     fun getDisplayRect(): RectF {
@@ -326,6 +335,7 @@ class VncSurfaceView @JvmOverloads constructor(
                         // When zoomed, two-finger drag pans the viewport
                         panOffsetY += deltaY
                         clampPan()
+                        notifyViewportChanged()
                         twoFingerLastMidY = currentMidY
                     } else if (abs(deltaY) > 12f) {
                         // When not zoomed, two-finger drag scrolls remote mouse wheel
@@ -385,6 +395,7 @@ class VncSurfaceView @JvmOverloads constructor(
         val top = (viewH - dstH) / 2f
         baseDstRect = RectF(left, top, left + dstW, top + dstH)
         clampPan()
+        post { notifyViewportChanged() }
     }
 
     private fun renderLoop() {
@@ -414,11 +425,6 @@ class VncSurfaceView @JvmOverloads constructor(
 
                             // Render scaled & panned remote desktop bitmap
                             canvas.drawBitmap(bitmap, null, dRect, paint)
-
-                            // Draw remote cursor pointer if in Trackpad mode
-                            if (isTrackpadMode) {
-                                drawCursor(canvas, dRect)
-                            }
                         }
                     } finally {
                         if (canvas != null) {
@@ -436,23 +442,5 @@ class VncSurfaceView @JvmOverloads constructor(
             }
         }
     }
-
-    private fun drawCursor(canvas: Canvas, dRect: RectF) {
-        if (remoteWidth <= 0 || remoteHeight <= 0 || dRect.width() <= 0f) return
-        val cx = dRect.left + (cursorX / (remoteWidth - 1)) * dRect.width()
-        val cy = dRect.top + (cursorY / (remoteHeight - 1)) * dRect.height()
-
-        cursorPath.reset()
-        cursorPath.moveTo(cx, cy)
-        cursorPath.lineTo(cx, cy + 24f)
-        cursorPath.lineTo(cx + 6f, cy + 18f)
-        cursorPath.lineTo(cx + 12f, cy + 26f)
-        cursorPath.lineTo(cx + 15f, cy + 23f)
-        cursorPath.lineTo(cx + 10f, cy + 16f)
-        cursorPath.lineTo(cx + 18f, cy + 16f)
-        cursorPath.close()
-
-        canvas.drawPath(cursorPath, cursorBorderPaint)
-        canvas.drawPath(cursorPath, cursorFillPaint)
-    }
 }
+

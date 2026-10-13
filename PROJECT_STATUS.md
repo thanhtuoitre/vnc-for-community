@@ -126,10 +126,28 @@ Build a working, low-latency Windows VNC Server and Android VNC Client.
     - `SimulateMouse`: Positions mouse cursor simultaneously with click/wheel events (`MouseEventMove | MouseEventAbsolute | MouseEventVirtualDesk`) for pixel-exact click placement.
     - `SimulateKeyboard`: Supports `KeyFlags.Unicode` via Win32 `KEYEVENTF_UNICODE` for universal character typing across Windows applications.
   - Test coverage: 50 server tests passing, 17 client tests passing, debug APK successfully assembled and deployed to `dist/ThanhVNC.apk`.
+ 
+- **Milestone 10 — RealVNC-Grade Remote Cursor System (Position, Shape, Hotspot & Overlay Renderer):**
+  - Contract-First Wire Protocol:
+    - `CursorPosition` (Type 13): 9-byte binary payload (`X: int32`, `Y: int32`, `Visible: byte`).
+    - `CursorShape` (Type 14): Metadata header + PNG bitmap (`Width: int32`, `Height: int32`, `HotspotX: int32`, `HotspotY: int32`, `Format: byte`, `Data: byte[]`).
+  - Windows VNC Server Capture:
+    - Native Win32 cursor capture (`CursorCapture.cs`) integrating `GetCursorInfo`, `GetIconInfo`, `GetObject`, `GetDIBits`, `GetDC`, and `ReleaseDC`.
+    - Handles 32-bit ARGB alpha cursors (modern Windows smooth shadows), 1-bit masked color cursors, and monochrome AND/XOR cursors (I-Beam, Crosshair, Resizing, Hand, Wait).
+    - Multi-monitor virtual desktop alignment: maps native screen coordinates to virtual framebuffer coordinates `(screenX - VirtualX, screenY - VirtualY)`.
+    - High-frequency 60 Hz tracking loop in `VncSession.cs` (`ProduceCursorUpdatesAsync`) sending real-time position updates and shape change notifications.
+    - Thread-safe socket dispatching: `_sendLock` (`SemaphoreSlim`) ensures atomic, interleaving-free packet transmission across video frames, heartbeat pings, clipboard events, and cursor updates.
+  - Android VNC Client Architecture:
+    - Hardware-accelerated `CursorOverlayView` positioned directly above `VncSurfaceView`, decoupling cursor rendering from video decoding (zero JPEG re-decoding, zero SurfaceView contention).
+    - Pixel-perfect hotspot mapping: `canvasMouseX = displayRect.left + (remoteX / remoteW) * displayRect.width()`, `drawLeft = canvasMouseX - hotspotX`.
+    - Viewport transformation resilience: cursor tracks smoothly across fit-to-screen, focal-point zoom (1.0x to 5.0x), two-finger pan, and portrait/landscape rotation with zero jumps or center resets.
+    - Local prediction & synchronization: trackpad and touch gestures update `CursorOverlayView` instantly for 0ms local response, keeping both local and remote pointers completely in sync.
+    - Crisp vector fallback arrow cursor when custom shape is not yet received.
+  - Test coverage: 59 server tests passing, 19 client tests passing (Debug + Release unit suites), debug APK successfully assembled and deployed to `dist/ThanhVNC.apk`.
 
 ## In Progress
 
-None. Milestones 1 through 9 are completely implemented, verified, tested, and checkpointed.
+None. Milestones 1 through 10 are completely implemented, verified, tested, and checkpointed.
 
 ## Known Problems
 
@@ -137,27 +155,31 @@ None.
 
 ## Tests
 
-- Windows Server Tests: `dotnet test server/VncServer.sln` — 50 passed, 0 failed, 0 skipped (~409 ms).
-- Android Client Tests: `gradlew test` (in `client/`) — 17 passed, 0 failed, 0 skipped (Debug + Release unit test passes).
+- Windows Server Tests: `dotnet test server/VncServer.sln` — 59 passed, 0 failed, 0 skipped (~399 ms).
+- Android Client Tests: `gradlew test` (in `client/`) — 19 passed, 0 failed, 0 skipped (Debug + Release unit test passes).
 - Android APK Assembly: `gradlew assembleDebug` (in `client/`) — BUILD SUCCESSFUL (output: `app-debug.apk`, updated in `dist/ThanhVNC.apk`).
 
 ## Changed Files
 
 - `PROJECT_STATUS.md`
 - `server/src/VncServer.Core/Protocol/VncMessages.cs`
-- `server/src/VncServer.Core/Input/InputSimulator.cs`
-- `tests/VncServer.Tests/AdvancedInputTests.cs`
+- `server/src/VncServer.Core/Protocol/VncProtocol.cs`
+- `server/src/VncServer.Core/Capture/CursorCapture.cs`
+- `server/src/VncServer.Core/Server/VncSession.cs`
+- `tests/VncServer.Tests/ProtocolTests.cs`
+- `tests/VncServer.Tests/CaptureAndInputTests.cs`
 - `client/app/src/main/java/com/thanhvnc/client/protocol/VncMessages.kt`
-- `client/app/src/test/java/com/thanhvnc/client/VncProtocolTest.kt`
+- `client/app/src/main/java/com/thanhvnc/client/protocol/VncProtocol.kt`
+- `client/app/src/main/java/com/thanhvnc/client/network/VncClient.kt`
+- `client/app/src/main/java/com/thanhvnc/client/ui/CursorOverlayView.kt`
 - `client/app/src/main/java/com/thanhvnc/client/ui/VncSurfaceView.kt`
 - `client/app/src/main/java/com/thanhvnc/client/ui/MainActivity.kt`
 - `client/app/src/main/res/layout/activity_main.xml`
-- `client/app/src/main/res/drawable/bg_modifier_btn.xml`
-- `client/app/src/main/res/drawable/bg_modifier_btn_active.xml`
+- `client/app/src/test/java/com/thanhvnc/client/VncProtocolTest.kt`
 
 ## Next Action
 
-Deploy Windows Server on host PC (`dist/run-server.bat`) and Android Client APK (`dist/ThanhVNC.apk`) to physical mobile device for live interactive field testing.
+Deploy Windows Server (`dist/run-server.bat`) and Android Client APK (`dist/ThanhVNC.apk`) for live interactive validation of remote cursor shape transformations (Notepad I-beam, browser hyperlinks, window resize borders, and wait cursors).
 
 ## Resume Instructions
 

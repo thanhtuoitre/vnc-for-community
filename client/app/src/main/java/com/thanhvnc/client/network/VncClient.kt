@@ -38,6 +38,12 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
     private val _clipboardEvents = MutableSharedFlow<String>(extraBufferCapacity = 5)
     val clipboardEvents: SharedFlow<String> = _clipboardEvents.asSharedFlow()
 
+    private val _cursorPositions = MutableSharedFlow<CursorPosition>(extraBufferCapacity = 5)
+    val cursorPositions: SharedFlow<CursorPosition> = _cursorPositions.asSharedFlow()
+
+    private val _cursorShapes = MutableSharedFlow<CursorShape>(extraBufferCapacity = 5)
+    val cursorShapes: SharedFlow<CursorShape> = _cursorShapes.asSharedFlow()
+
     private var currentQuality: Byte = 70
     private var currentFps: Byte = 30
 
@@ -170,6 +176,14 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
                     VncMessageType.ClipboardText -> {
                         val clip = VncProtocol.deserializeClipboard(payload)
                         _clipboardEvents.tryEmit(clip.text)
+                    }
+                    VncMessageType.CursorPosition -> {
+                        val pos = VncProtocol.deserializeCursorPosition(payload)
+                        _cursorPositions.tryEmit(pos)
+                    }
+                    VncMessageType.CursorShape -> {
+                        val shape = VncProtocol.deserializeCursorShape(payload)
+                        _cursorShapes.tryEmit(shape)
                     }
                     VncMessageType.Disconnect -> {
                         break

@@ -12,7 +12,9 @@ enum class VncMessageType(val value: Byte) {
     Disconnect(9),
     QualityControl(10),
     ClipboardText(11),
-    AudioFrame(12);
+    AudioFrame(12),
+    CursorPosition(13),
+    CursorShape(14);
 
     companion object {
         private val map = entries.associateBy { it.value }
@@ -90,5 +92,20 @@ data class AudioFrame(
     val sampleRate: Int,
     val channels: Byte,
     val codec: Byte,
+    val data: ByteArray
+)
+
+data class CursorPosition(
+    val x: Int,
+    val y: Int,
+    val visible: Boolean
+)
+
+data class CursorShape(
+    val width: Int,
+    val height: Int,
+    val hotspotX: Int,
+    val hotspotY: Int,
+    val format: Byte,
     val data: ByteArray
 )

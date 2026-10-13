@@ -246,7 +246,16 @@ class MainActivity : AppCompatActivity() {
         binding.vncSurfaceView.onKeyboardInput = { kbInput ->
             client.sendKeyboardInput(kbInput)
         }
+
+        binding.vncSurfaceView.onViewportChanged = { dRect, rw, rh ->
+            binding.cursorOverlayView.updateDisplayRect(dRect, rw, rh)
+        }
+
+        binding.vncSurfaceView.onLocalCursorMoved = { cx, cy ->
+            binding.cursorOverlayView.updateRemotePosition(cx, cy, true)
+        }
     }
+
 
     private fun sendVirtualKeyPress(vk: Short, isExtended: Boolean = false) {
         var downFlags = KeyFlags.KEY_DOWN
@@ -449,6 +458,12 @@ class MainActivity : AppCompatActivity() {
                             repository.updateLastConnected(id)
                             refreshServerList()
                         }
+
+                        binding.cursorOverlayView.updateDisplayRect(
+                            binding.vncSurfaceView.getDisplayRect(),
+                            state.screenWidth,
+                            state.screenHeight
+                        )
                     }
                     is VncConnectionState.Reconnecting -> {
                         binding.textHudStats.text = "Reconnecting (${state.attempt})..."
@@ -493,7 +508,24 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this@MainActivity, "Received clipboard text from host", Toast.LENGTH_SHORT).show()
             }
         }
+
+        lifecycleScope.launch {
+            client.cursorPositions.collect { pos ->
+                binding.cursorOverlayView.updateRemotePosition(pos.x.toFloat(), pos.y.toFloat(), pos.visible)
+                binding.vncSurfaceView.setLocalCursorPosition(pos.x.toFloat(), pos.y.toFloat())
+            }
+        }
+
+        lifecycleScope.launch {
+            client.cursorShapes.collect { shape ->
+                val bmp = android.graphics.BitmapFactory.decodeByteArray(shape.data, 0, shape.data.size)
+                if (bmp != null) {
+                    binding.cursorOverlayView.updateCursorShape(bmp, shape.hotspotX, shape.hotspotY)
+                }
+            }
+        }
     }
+
 
     private fun updateStatsDisplay(fps: Float, rttMs: Long) {
         val statsText = if (rttMs > 0) {
