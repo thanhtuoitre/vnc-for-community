@@ -9,7 +9,8 @@ enum class VncMessageType(val value: Byte) {
     MouseInput(6),
     KeyboardInput(7),
     Heartbeat(8),
-    Disconnect(9);
+    Disconnect(9),
+    QualityControl(10);
 
     companion object {
         private val map = entries.associateBy { it.value }
@@ -76,3 +77,5 @@ data class KeyboardInput(
 data class Heartbeat(val timestampMs: Long)
 
 data class DisconnectMessage(val reasonCode: Byte)
+
+data class QualityControl(val quality: Byte, val targetFps: Byte)

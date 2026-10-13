@@ -87,6 +87,10 @@ class MainActivity : AppCompatActivity() {
                         binding.textStatus.text = "${getString(R.string.status_connected)} (${state.screenWidth}x${state.screenHeight})"
                         binding.btnConnect.text = getString(R.string.disconnect)
                     }
+                    is VncConnectionState.Reconnecting -> {
+                        binding.textStatus.text = "Reconnecting (attempt ${state.attempt})..."
+                        binding.btnConnect.text = getString(R.string.disconnect)
+                    }
                     is VncConnectionState.Error -> {
                         binding.textStatus.text = "Error: ${state.message}"
                         binding.btnConnect.text = getString(R.string.connect)

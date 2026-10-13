@@ -230,6 +230,15 @@ public static class VncProtocol
         return new DisconnectMessage(payload[0]);
     }
 
+    public static byte[] SerializeQualityControl(QualityControl qc) => [qc.Quality, qc.TargetFps];
+
+    public static QualityControl DeserializeQualityControl(ReadOnlySpan<byte> payload)
+    {
+        if (payload.Length < 2)
+            throw new FormatException("QualityControl payload too short");
+        return new QualityControl(payload[0], payload[1]);
+    }
+
     public static byte[] GenerateChallenge(int length = 32)
     {
         byte[] challenge = new byte[length];

@@ -119,6 +119,13 @@ object VncProtocol {
 
     fun serializeDisconnect(msg: DisconnectMessage): ByteArray = byteArrayOf(msg.reasonCode)
 
+    fun serializeQualityControl(qc: QualityControl): ByteArray = byteArrayOf(qc.quality, qc.targetFps)
+
+    fun deserializeQualityControl(payload: ByteArray): QualityControl {
+        require(payload.size >= 2) { "QualityControl payload too short" }
+        return QualityControl(payload[0], payload[1])
+    }
+
     fun readExactly(stream: InputStream, buffer: ByteArray, length: Int) {
         var offset = 0
         while (offset < length) {

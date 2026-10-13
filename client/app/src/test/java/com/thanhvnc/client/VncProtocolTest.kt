@@ -130,4 +130,14 @@ class VncProtocolTest {
         assertArrayEquals(sig1, sig2)
         assertFalse(sig1.contentEquals(sigWrong))
     }
+
+    @Test
+    fun testQualityControlRoundtrip() {
+        val original = QualityControl(85.toByte(), 45.toByte())
+        val serialized = VncProtocol.serializeQualityControl(original)
+        val deserialized = VncProtocol.deserializeQualityControl(serialized)
+
+        assertEquals(original.quality, deserialized.quality)
+        assertEquals(original.targetFps, deserialized.targetFps)
+    }
 }

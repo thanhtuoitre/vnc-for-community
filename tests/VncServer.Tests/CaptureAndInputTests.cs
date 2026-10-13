@@ -34,19 +34,22 @@ public class CaptureAndInputTests
     }
 
     [Fact]
-    public void ScreenCapture_ReturnsNullOrValidFrameWhenUnchanged()
+    public void ScreenCapture_DynamicQualityChange()
     {
-        using var capture = new ScreenCapture(50);
-        byte[]? frame1 = capture.CaptureJpeg(out _, force: true);
-        Assert.NotNull(frame1);
+        using var capture = new ScreenCapture(20);
+        Assert.Equal(20, capture.Quality);
 
-        byte[]? frame2 = capture.CaptureJpeg(out _, force: false);
-        // Either null (unchanged) or valid JPEG
-        if (frame2 != null)
-        {
-            Assert.Equal(0xFF, frame2[0]);
-            Assert.Equal(0xD8, frame2[1]);
-        }
+        byte[]? lowQ = capture.CaptureJpeg(out _, force: true);
+        Assert.NotNull(lowQ);
+
+        capture.SetQuality(90);
+        Assert.Equal(90, capture.Quality);
+
+        byte[]? highQ = capture.CaptureJpeg(out _, force: true);
+        Assert.NotNull(highQ);
+
+        // Quality 90 JPEG should be larger than Quality 20 JPEG
+        Assert.True(highQ.Length > lowQ.Length);
     }
 
     [Fact]

@@ -125,6 +125,13 @@ public sealed class VncSession : IAsyncDisposable
                     await SendPacketAsync(VncMessageType.Heartbeat, VncProtocol.SerializeHeartbeat(hb), ct).ConfigureAwait(false);
                     break;
 
+                case VncMessageType.QualityControl:
+                    var qc = VncProtocol.DeserializeQualityControl(payload);
+                    _capture.SetQuality(qc.Quality);
+                    _targetFps = Math.Clamp((int)qc.TargetFps, 5, 60);
+                    _log?.Invoke($"[{RemoteEndPoint}] Adaptive Quality: {qc.Quality}%, FPS: {_targetFps}");
+                    break;
+
                 case VncMessageType.Disconnect:
                     _log?.Invoke($"[{RemoteEndPoint}] Client requested disconnect.");
                     return;
@@ -136,23 +143,27 @@ public sealed class VncSession : IAsyncDisposable
         }
     }
 
+    private volatile int _targetFps = 30;
+
     private async Task ProduceFramesAsync(ChannelWriter<byte[]> writer, CancellationToken ct)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(33)); // Target ~30 FPS
         bool forceFirstFrame = true;
 
-        while (!ct.IsCancellationRequested && await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+        while (!ct.IsCancellationRequested)
         {
             byte[]? jpeg = _capture.CaptureJpeg(out uint frameIndex, force: forceFirstFrame);
             forceFirstFrame = false;
 
-            if (jpeg == null) continue; // Unchanged screen content
+            if (jpeg != null)
+            {
+                long timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                var frame = new ScreenFrame(frameIndex, timestamp, 0, 0, _capture.Width, _capture.Height, 1, jpeg);
+                byte[] framePayload = VncProtocol.SerializeScreenFrame(frame);
+                writer.TryWrite(framePayload);
+            }
 
-            long timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var frame = new ScreenFrame(frameIndex, timestamp, 0, 0, _capture.Width, _capture.Height, 1, jpeg);
-            byte[] framePayload = VncProtocol.SerializeScreenFrame(frame);
-
-            writer.TryWrite(framePayload);
+            int delayMs = Math.Max(16, 1000 / Math.Clamp(_targetFps, 5, 60));
+            await Task.Delay(delayMs, ct).ConfigureAwait(false);
         }
     }
 

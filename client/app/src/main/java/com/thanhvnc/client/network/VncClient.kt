@@ -20,6 +20,7 @@ sealed class VncConnectionState {
     data object Handshaking : VncConnectionState()
     data object Authenticating : VncConnectionState()
     data class Connected(val screenWidth: Int, val screenHeight: Int) : VncConnectionState()
+    data class Reconnecting(val attempt: Int, val nextDelayMs: Long) : VncConnectionState()
     data class Error(val message: String) : VncConnectionState()
 }
 
@@ -33,8 +34,9 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
 
     private var socket: Socket? = null
     private var job: Job? = null
+    private var isManualDisconnect = false
 
-    // Channel for immediate priority transmission of input packets (bypassing frame reads)
+    // Channel for immediate priority transmission of input/control packets (bypassing frame reads)
     private val outgoingPackets = Channel<Pair<VncMessageType, ByteArray>>(Channel.BUFFERED)
 
     var screenWidth: Int = 1920
@@ -42,88 +44,120 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
     var screenHeight: Int = 1080
         private set
 
-    fun connect(host: String, port: Int, password: String) {
+    fun connect(host: String, port: Int, password: String, autoReconnect: Boolean = true) {
         disconnect()
+        isManualDisconnect = false
+
         job = clientScope.launch {
-            try {
-                _state.value = VncConnectionState.Connecting
-                val s = Socket()
-                s.tcpNoDelay = true
-                s.connect(InetSocketAddress(host, port), 5000)
-                socket = s
+            var attempt = 1
+            var backoffMs = 1000L
 
-                val inputStream = BufferedInputStream(s.getInputStream())
-                val outputStream = BufferedOutputStream(s.getOutputStream())
-
-                // 1. Handshake
-                _state.value = VncConnectionState.Handshaking
-                val handshakeReq = HandshakeRequest(VncProtocol.CURRENT_VERSION, "AndroidClient")
-                sendPacketDirect(outputStream, VncMessageType.HandshakeRequest, VncProtocol.serializeHandshakeRequest(handshakeReq))
-
-                val (resType, resPayload) = readPacket(inputStream)
-                if (resType != VncMessageType.HandshakeResponse) {
-                    throw IllegalStateException("Expected HandshakeResponse, got $resType")
-                }
-                val handshakeRes = VncProtocol.deserializeHandshakeResponse(resPayload)
-                screenWidth = handshakeRes.screenWidth
-                screenHeight = handshakeRes.screenHeight
-
-                // 2. Authentication
-                _state.value = VncConnectionState.Authenticating
-                val signature = HmacAuth.computeHmac(handshakeRes.challenge, password)
-                val authReq = AuthRequest(signature)
-                sendPacketDirect(outputStream, VncMessageType.AuthRequest, VncProtocol.serializeAuthRequest(authReq))
-
-                val (authType, authPayload) = readPacket(inputStream)
-                if (authType != VncMessageType.AuthResponse) {
-                    throw IllegalStateException("Expected AuthResponse, got $authType")
-                }
-                val authRes = VncProtocol.deserializeAuthResponse(authPayload)
-                if (authRes.statusCode.toInt() != 0) {
-                    throw SecurityException("Authentication rejected by server (code ${authRes.statusCode})")
-                }
-
-                _state.value = VncConnectionState.Connected(screenWidth, screenHeight)
-
-                // 3. Start dual pipelines: Send input channel + Receive frame loop
-                val sendJob = launch {
-                    for ((type, payload) in outgoingPackets) {
-                        sendPacketDirect(outputStream, type, payload)
-                    }
-                }
-
+            while (isActive && !isManualDisconnect) {
                 try {
-                    while (isActive) {
-                        val (type, payload) = readPacket(inputStream)
-                        when (type) {
-                            VncMessageType.ScreenFrame -> {
-                                val frame = VncProtocol.deserializeScreenFrame(payload)
-                                _frames.tryEmit(frame)
-                            }
-                            VncMessageType.Heartbeat -> {
-                                // Acknowledge heartbeat
-                                outgoingPackets.trySend(Pair(VncMessageType.Heartbeat, payload))
-                            }
-                            VncMessageType.Disconnect -> {
-                                break
-                            }
-                            else -> Unit
-                        }
+                    _state.value = if (attempt == 1) VncConnectionState.Connecting else VncConnectionState.Reconnecting(attempt, 0)
+                    runSession(host, port, password)
+                    attempt = 1
+                    backoffMs = 1000L
+                } catch (e: CancellationException) {
+                    break
+                } catch (e: Exception) {
+                    if (isManualDisconnect) break
+
+                    if (autoReconnect) {
+                        _state.value = VncConnectionState.Reconnecting(attempt, backoffMs)
+                        delay(backoffMs)
+                        attempt++
+                        backoffMs = (backoffMs * 2).coerceAtMost(10000L)
+                    } else {
+                        _state.value = VncConnectionState.Error(e.message ?: "Connection error")
+                        break
                     }
                 } finally {
-                    sendJob.cancel()
-                }
-
-            } catch (e: Exception) {
-                if (isActive) {
-                    _state.value = VncConnectionState.Error(e.message ?: "Connection error")
-                }
-            } finally {
-                cleanup()
-                if (_state.value !is VncConnectionState.Error) {
-                    _state.value = VncConnectionState.Disconnected
+                    cleanup()
                 }
             }
+
+            if (_state.value !is VncConnectionState.Error) {
+                _state.value = VncConnectionState.Disconnected
+            }
+        }
+    }
+
+    private suspend fun runSession(host: String, port: Int, password: String) = coroutineScope {
+        val s = Socket()
+        s.tcpNoDelay = true
+        s.connect(InetSocketAddress(host, port), 5000)
+        socket = s
+
+        val inputStream = BufferedInputStream(s.getInputStream())
+        val outputStream = BufferedOutputStream(s.getOutputStream())
+
+        // 1. Handshake
+        _state.value = VncConnectionState.Handshaking
+        val handshakeReq = HandshakeRequest(VncProtocol.CURRENT_VERSION, "AndroidClient")
+        sendPacketDirect(outputStream, VncMessageType.HandshakeRequest, VncProtocol.serializeHandshakeRequest(handshakeReq))
+
+        val (resType, resPayload) = readPacket(inputStream)
+        if (resType != VncMessageType.HandshakeResponse) {
+            throw IllegalStateException("Expected HandshakeResponse, got $resType")
+        }
+        val handshakeRes = VncProtocol.deserializeHandshakeResponse(resPayload)
+        screenWidth = handshakeRes.screenWidth
+        screenHeight = handshakeRes.screenHeight
+
+        // 2. Authentication
+        _state.value = VncConnectionState.Authenticating
+        val signature = HmacAuth.computeHmac(handshakeRes.challenge, password)
+        val authReq = AuthRequest(signature)
+        sendPacketDirect(outputStream, VncMessageType.AuthRequest, VncProtocol.serializeAuthRequest(authReq))
+
+        val (authType, authPayload) = readPacket(inputStream)
+        if (authType != VncMessageType.AuthResponse) {
+            throw IllegalStateException("Expected AuthResponse, got $authType")
+        }
+        val authRes = VncProtocol.deserializeAuthResponse(authPayload)
+        if (authRes.statusCode.toInt() != 0) {
+            throw SecurityException("Authentication rejected by server (code ${authRes.statusCode})")
+        }
+
+        _state.value = VncConnectionState.Connected(screenWidth, screenHeight)
+
+        // 3. Sender Pipeline: sends mouse, keyboard, quality control, heartbeats
+        val sendJob = launch {
+            for ((type, payload) in outgoingPackets) {
+                sendPacketDirect(outputStream, type, payload)
+            }
+        }
+
+        // 4. Heartbeat Keepalive: ping every 5 seconds
+        val heartbeatJob = launch {
+            while (isActive) {
+                delay(5000)
+                val hb = Heartbeat(System.currentTimeMillis())
+                outgoingPackets.trySend(Pair(VncMessageType.Heartbeat, VncProtocol.serializeHeartbeat(hb)))
+            }
+        }
+
+        try {
+            while (isActive) {
+                val (type, payload) = readPacket(inputStream)
+                when (type) {
+                    VncMessageType.ScreenFrame -> {
+                        val frame = VncProtocol.deserializeScreenFrame(payload)
+                        _frames.tryEmit(frame)
+                    }
+                    VncMessageType.Heartbeat -> {
+                        // Heartbeat echo received from server
+                    }
+                    VncMessageType.Disconnect -> {
+                        break
+                    }
+                    else -> Unit
+                }
+            }
+        } finally {
+            heartbeatJob.cancel()
+            sendJob.cancel()
         }
     }
 
@@ -135,7 +169,13 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
         outgoingPackets.trySend(Pair(VncMessageType.KeyboardInput, VncProtocol.serializeKeyboardInput(input)))
     }
 
+    fun setQuality(quality: Byte, targetFps: Byte) {
+        val qc = QualityControl(quality, targetFps)
+        outgoingPackets.trySend(Pair(VncMessageType.QualityControl, VncProtocol.serializeQualityControl(qc)))
+    }
+
     fun disconnect() {
+        isManualDisconnect = true
         job?.cancel()
         job = null
         cleanup()

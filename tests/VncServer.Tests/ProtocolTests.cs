@@ -147,6 +147,17 @@ public class ProtocolTests
     }
 
     [Fact]
+    public void QualityControl_Roundtrip_Succeeds()
+    {
+        var original = new QualityControl(85, 45);
+        byte[] serialized = VncProtocol.SerializeQualityControl(original);
+        var deserialized = VncProtocol.DeserializeQualityControl(serialized);
+
+        Assert.Equal(original.Quality, deserialized.Quality);
+        Assert.Equal(original.TargetFps, deserialized.TargetFps);
+    }
+
+    [Fact]
     public void HmacAuthentication_VerificationLogic_WorksCorrectly()
     {
         byte[] challenge = VncProtocol.GenerateChallenge(32);

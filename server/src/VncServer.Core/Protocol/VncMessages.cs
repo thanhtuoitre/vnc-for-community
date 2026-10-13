@@ -12,7 +12,8 @@ public enum VncMessageType : byte
     MouseInput = 6,
     KeyboardInput = 7,
     Heartbeat = 8,
-    Disconnect = 9
+    Disconnect = 9,
+    QualityControl = 10
 }
 
 [Flags]
@@ -63,3 +64,5 @@ public sealed record KeyboardInput(KeyFlags Flags, ushort VirtualKey, ushort Sca
 public sealed record Heartbeat(long TimestampMs);
 
 public sealed record DisconnectMessage(byte ReasonCode);
+
+public sealed record QualityControl(byte Quality, byte TargetFps);

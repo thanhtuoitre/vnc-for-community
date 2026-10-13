@@ -79,6 +79,10 @@ public class ServerIntegrationTests
         var mouse = new MouseInput(MouseFlags.Move, 100, 100, 0);
         await SendPacketAsync(stream, VncMessageType.MouseInput, VncProtocol.SerializeMouseInput(mouse), ct);
 
+        // 5b. Send QualityControl
+        var qc = new QualityControl(80, 20);
+        await SendPacketAsync(stream, VncMessageType.QualityControl, VncProtocol.SerializeQualityControl(qc), ct);
+
         // 6. Receive at least one ScreenFrame
         var (frameType, framePayload) = await ReadPacketAsync(stream, ct);
         Assert.Equal(VncMessageType.ScreenFrame, frameType);

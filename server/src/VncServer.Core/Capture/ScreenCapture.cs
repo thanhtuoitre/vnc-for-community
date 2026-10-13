@@ -23,7 +23,7 @@ public sealed class ScreenCapture : IDisposable
 
     public int Width { get; private set; }
     public int Height { get; private set; }
-    public int Quality { get; }
+    public int Quality { get; private set; }
 
     public ScreenCapture(int quality = 70)
     {
@@ -34,6 +34,15 @@ public sealed class ScreenCapture : IDisposable
         _encoderParameters.Param[0] = new EncoderParameter(Encoder.Quality, (long)Quality);
 
         RefreshResolution();
+    }
+
+    public void SetQuality(int quality)
+    {
+        lock (_syncLock)
+        {
+            Quality = Math.Clamp(quality, 10, 100);
+            _encoderParameters.Param[0] = new EncoderParameter(Encoder.Quality, (long)Quality);
+        }
     }
 
     public void RefreshResolution()
