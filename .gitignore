@@ -3,6 +3,7 @@
 **/obj/
 **/build/
 **/dist/
+**/publish/
 **/out/
 
 # IDE and Editor files
