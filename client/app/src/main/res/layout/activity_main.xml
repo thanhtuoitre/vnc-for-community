@@ -1,122 +1,470 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootContainer"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/dark_bg"
-    android:orientation="vertical">
+    android:background="@color/dark_bg">
 
-    <!-- Top Connection Bar -->
+    <!-- ======================================================== -->
+    <!-- SCREEN 1: SERVER DASHBOARD & DEVICE MANAGER (Disconnected) -->
+    <!-- ======================================================== -->
     <LinearLayout
-        android:id="@+id/connectionBar"
+        android:id="@+id/layoutDashboard"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@color/surface_dark"
-        android:elevation="4dp"
-        android:orientation="horizontal"
-        android:padding="8dp">
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:visibility="visible">
 
-        <EditText
-            android:id="@+id/inputHost"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_weight="3"
-            android:background="@android:color/transparent"
-            android:hint="@string/host_hint"
-            android:inputType="textUri"
-            android:paddingHorizontal="8dp"
-            android:textColor="@color/white"
-            android:textColorHint="@color/text_secondary"
-            android:textSize="14sp" />
+        <!-- Top App Bar -->
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/topAppBar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="@color/surface_dark"
+            android:elevation="4dp"
+            app:title="ThanhVNC"
+            app:titleTextColor="@color/text_primary"
+            app:subtitle="Remote Desktop"
+            app:subtitleTextColor="@color/text_secondary">
 
-        <EditText
-            android:id="@+id/inputPort"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_weight="1.2"
-            android:background="@android:color/transparent"
-            android:hint="@string/port_hint"
-            android:inputType="number"
-            android:paddingHorizontal="4dp"
-            android:text="5901"
-            android:textColor="@color/white"
-            android:textColorHint="@color/text_secondary"
-            android:textSize="14sp" />
+            <!-- Add Server Action Button in Toolbar -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnAddServer"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:layout_marginEnd="8dp"
+                android:text="+ Add"
+                android:textColor="@color/primary_accent"
+                android:textSize="14sp"
+                android:textStyle="bold" />
 
-        <EditText
-            android:id="@+id/inputPassword"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_weight="2"
-            android:background="@android:color/transparent"
-            android:hint="@string/password_hint"
-            android:inputType="textPassword"
-            android:paddingHorizontal="4dp"
-            android:text="vncsecret"
-            android:textColor="@color/white"
-            android:textColorHint="@color/text_secondary"
-            android:textSize="14sp" />
+        </com.google.android.material.appbar.MaterialToolbar>
 
-        <Button
-            android:id="@+id/btnConnect"
-            android:layout_width="wrap_content"
-            android:layout_height="40dp"
-            android:layout_marginStart="4dp"
-            android:backgroundTint="@color/primary_accent"
-            android:text="@string/connect"
-            android:textColor="@color/white"
-            android:textSize="12sp" />
+        <androidx.core.widget.NestedScrollView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true">
 
-        <ImageButton
-            android:id="@+id/btnKeyboard"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="4dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/toggle_keyboard"
-            android:src="@android:drawable/ic_input_get" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingBottom="24dp">
 
-        <ImageButton
-            android:id="@+id/btnClipboard"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="4dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Sync Clipboard"
-            android:src="@android:drawable/ic_menu_send" />
+                <!-- Quick Direct Connect Card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/cardQuickConnect"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="16dp"
+                    android:layout_marginTop="16dp"
+                    app:cardBackgroundColor="@color/surface_dark"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="2dp"
+                    app:strokeColor="@color/surface_border"
+                    app:strokeWidth="1dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/quick_connect"
+                            android:textColor="@color/text_primary"
+                            android:textSize="16sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="Connect directly by entering server address and password."
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp" />
+
+                        <!-- Host & Port inputs -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:orientation="horizontal">
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginEnd="6dp"
+                                android:layout_weight="3"
+                                android:hint="@string/host_hint"
+                                app:boxBackgroundColor="@color/surface_variant"
+                                app:boxCornerRadiusBottomEnd="10dp"
+                                app:boxCornerRadiusBottomStart="10dp"
+                                app:boxCornerRadiusTopEnd="10dp"
+                                app:boxCornerRadiusTopStart="10dp"
+                                app:boxStrokeColor="@color/primary_accent"
+                                app:hintTextColor="@color/primary_accent">
+
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/inputHost"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="textUri"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="14sp" />
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="6dp"
+                                android:layout_weight="1.2"
+                                android:hint="@string/port_hint"
+                                app:boxBackgroundColor="@color/surface_variant"
+                                app:boxCornerRadiusBottomEnd="10dp"
+                                app:boxCornerRadiusBottomStart="10dp"
+                                app:boxCornerRadiusTopEnd="10dp"
+                                app:boxCornerRadiusTopStart="10dp"
+                                app:boxStrokeColor="@color/primary_accent"
+                                app:hintTextColor="@color/primary_accent">
+
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/inputPort"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="number"
+                                    android:text="5901"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="14sp" />
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                        </LinearLayout>
+
+                        <!-- Password & Connect button -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginEnd="8dp"
+                                android:layout_weight="1"
+                                android:hint="@string/password_hint"
+                                app:boxBackgroundColor="@color/surface_variant"
+                                app:boxCornerRadiusBottomEnd="10dp"
+                                app:boxCornerRadiusBottomStart="10dp"
+                                app:boxCornerRadiusTopEnd="10dp"
+                                app:boxCornerRadiusTopStart="10dp"
+                                app:boxStrokeColor="@color/primary_accent"
+                                app:hintTextColor="@color/primary_accent"
+                                app:passwordToggleEnabled="true"
+                                app:passwordToggleTint="@color/text_secondary">
+
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/inputPassword"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="textPassword"
+                                    android:text="vncsecret"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="14sp" />
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnQuickConnect"
+                                android:layout_width="wrap_content"
+                                android:layout_height="52dp"
+                                android:backgroundTint="@color/primary_accent"
+                                android:paddingHorizontal="20dp"
+                                android:text="@string/connect"
+                                android:textAllCaps="false"
+                                android:textColor="@color/white"
+                                android:textSize="14sp"
+                                android:textStyle="bold"
+                                app:cornerRadius="12dp" />
+
+                        </LinearLayout>
+
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Saved Desktops Section Header -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="16dp"
+                    android:layout_marginTop="20dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/saved_servers"
+                        android:textColor="@color/text_primary"
+                        android:textSize="17sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/textServerCount"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <!-- Saved Servers List -->
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recyclerServers"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:nestedScrollingEnabled="false" />
+
+                <!-- Empty State Layout -->
+                <LinearLayout
+                    android:id="@+id/layoutEmptyServers"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="32dp"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:padding="24dp"
+                    android:visibility="gone">
+
+                    <ImageView
+                        android:layout_width="64dp"
+                        android:layout_height="64dp"
+                        android:contentDescription="No Desktops"
+                        android:src="@android:drawable/ic_menu_slideshow"
+                        app:tint="@color/surface_border" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="@string/no_servers_title"
+                        android:textColor="@color/text_primary"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:gravity="center"
+                        android:text="@string/no_servers_desc"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
+
     </LinearLayout>
 
-    <!-- Status & Metrics bar -->
-    <LinearLayout
+    <!-- ======================================================== -->
+    <!-- SCREEN 2: IMMERSIVE FULLSCREEN REMOTE DESKTOP VIEWER     -->
+    <!-- ======================================================== -->
+    <FrameLayout
+        android:id="@+id/layoutViewer"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@color/surface_dark"
-        android:orientation="horizontal"
-        android:paddingHorizontal="8dp"
-        android:paddingBottom="4dp">
+        android:layout_height="match_parent"
+        android:visibility="gone">
 
-        <TextView
-            android:id="@+id/textStatus"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/status_disconnected"
-            android:textColor="@color/text_secondary"
-            android:textSize="12sp" />
+        <!-- Fullscreen Canvas SurfaceView -->
+        <com.thanhvnc.client.ui.VncSurfaceView
+            android:id="@+id/vncSurfaceView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
 
-        <TextView
-            android:id="@+id/textStats"
+        <!-- Floating HUD Overlay Pill (Collapsible & Draggable) -->
+        <LinearLayout
+            android:id="@+id/overlayControlBar"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="0 FPS"
-            android:textColor="@color/text_secondary"
-            android:textSize="12sp" />
-    </LinearLayout>
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bg_control_pill"
+            android:elevation="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="6dp">
 
-    <!-- Remote Screen SurfaceView -->
-    <com.thanhvnc.client.ui.VncSurfaceView
-        android:id="@+id/vncSurfaceView"
+            <!-- Metrics Status Badge -->
+            <TextView
+                android:id="@+id/textHudStats"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:paddingHorizontal="6dp"
+                android:text="30 FPS | 15 ms"
+                android:textColor="@color/success_light"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <!-- Expanded action buttons container -->
+            <LinearLayout
+                android:id="@+id/layoutHudActions"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="visible">
+
+                <!-- Toggle Keyboard -->
+                <ImageButton
+                    android:id="@+id/btnToggleKeyboard"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:layout_marginHorizontal="2dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Keyboard"
+                    android:src="@android:drawable/ic_input_get"
+                    app:tint="@color/text_primary" />
+
+                <!-- Sync Clipboard -->
+                <ImageButton
+                    android:id="@+id/btnSyncClipboard"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:layout_marginHorizontal="2dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Clipboard"
+                    android:src="@android:drawable/ic_menu_send"
+                    app:tint="@color/text_primary" />
+
+                <!-- Toggle Mouse / Trackpad Mode -->
+                <ImageButton
+                    android:id="@+id/btnToggleMouseMode"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:layout_marginHorizontal="2dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Mouse Mode"
+                    android:src="@android:drawable/ic_menu_compass"
+                    app:tint="@color/primary_accent" />
+
+                <!-- Quality Selection Menu -->
+                <ImageButton
+                    android:id="@+id/btnQualityMenu"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:layout_marginHorizontal="2dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Quality"
+                    android:src="@android:drawable/ic_menu_preferences"
+                    app:tint="@color/text_primary" />
+
+                <!-- Disconnect Button -->
+                <ImageButton
+                    android:id="@+id/btnDisconnectSession"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:layout_marginStart="4dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Disconnect"
+                    android:src="@android:drawable/ic_menu_close_clear_cancel"
+                    app:tint="@color/danger_color" />
+
+            </LinearLayout>
+
+            <!-- Collapse / Expand HUD Toggle -->
+            <ImageButton
+                android:id="@+id/btnCollapseHud"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="2dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Toggle HUD"
+                android:src="@android:drawable/ic_menu_more"
+                app:tint="@color/text_secondary" />
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+    <!-- ======================================================== -->
+    <!-- SCREEN 3: CONNECTING PROGRESS OVERLAY                    -->
+    <!-- ======================================================== -->
+    <FrameLayout
+        android:id="@+id/layoutConnectingProgress"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_height="match_parent"
+        android:background="@color/overlay_bg"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone">
 
-</LinearLayout>
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="280dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            app:cardBackgroundColor="@color/surface_dark"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="8dp"
+            app:strokeColor="@color/surface_border"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:padding="24dp">
+
+                <com.google.android.material.progressindicator.CircularProgressIndicator
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:indeterminate="true"
+                    app:indicatorColor="@color/primary_accent"
+                    app:trackColor="@color/surface_variant" />
+
+                <TextView
+                    android:id="@+id/textConnectingStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/status_connecting"
+                    android:textColor="@color/text_primary"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/textConnectingHost"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="192.168.1.10:5901"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnCancelConnect"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/cancel"
+                    android:textAllCaps="false"
+                    android:textColor="@color/danger_color"
+                    android:textSize="14sp" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+    </FrameLayout>
+
+</FrameLayout>

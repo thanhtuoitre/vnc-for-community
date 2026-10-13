@@ -5,98 +5,130 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.LayoutInflater
 import android.view.View
 import android.view.inputmethod.InputMethodManager
+import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.snackbar.Snackbar
 import com.thanhvnc.client.R
 import com.thanhvnc.client.databinding.ActivityMainBinding
+import com.thanhvnc.client.databinding.DialogEditServerBinding
+import com.thanhvnc.client.model.ServerProfile
+import com.thanhvnc.client.model.ServerProfileRepository
 import com.thanhvnc.client.network.VncClient
 import com.thanhvnc.client.network.VncConnectionState
 import com.thanhvnc.client.protocol.KeyFlags
 import com.thanhvnc.client.protocol.KeyboardInput
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val client = VncClient()
+    private lateinit var repository: ServerProfileRepository
+    private lateinit var adapter: ServerProfileAdapter
 
+    private var activeProfileId: String? = null
     private var frameCount = 0
     private var lastFpsTimestamp = System.currentTimeMillis()
+    private var currentFps = 0f
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        loadSavedPreferences()
+        repository = ServerProfileRepository(this)
+
+        setupRecyclerView()
         setupListeners()
         observeClient()
+        refreshServerList()
     }
 
-    private fun loadSavedPreferences() {
-        val prefs = getSharedPreferences("thanhvnc_prefs", Context.MODE_PRIVATE)
-        val host = prefs.getString("last_host", null)
-        val port = prefs.getInt("last_port", 5901)
-        val pass = prefs.getString("last_password", null)
-
-        if (!host.isNullOrEmpty()) {
-            binding.inputHost.setText(host)
-        }
-        if (port > 0) {
-            binding.inputPort.setText(port.toString())
-        }
-        if (!pass.isNullOrEmpty()) {
-            binding.inputPassword.setText(pass)
-        }
+    private fun setupRecyclerView() {
+        adapter = ServerProfileAdapter(
+            onConnect = { profile ->
+                activeProfileId = profile.id
+                connectToServer(profile.host, profile.port, profile.password)
+            },
+            onEdit = { profile ->
+                showEditServerDialog(profile)
+            },
+            onDelete = { profile ->
+                MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.delete_server)
+                    .setMessage("Remove '${profile.name}' from saved desktops?")
+                    .setNegativeButton(R.string.cancel, null)
+                    .setPositiveButton(R.string.delete) { _, _ ->
+                        repository.deleteProfile(profile.id)
+                        refreshServerList()
+                    }
+                    .show()
+            }
+        )
+        binding.recyclerServers.layoutManager = LinearLayoutManager(this)
+        binding.recyclerServers.adapter = adapter
     }
 
-    private fun savePreferences(host: String, port: Int, pass: String) {
-        val prefs = getSharedPreferences("thanhvnc_prefs", Context.MODE_PRIVATE)
-        prefs.edit()
-            .putString("last_host", host)
-            .putInt("last_port", port)
-            .putString("last_password", pass)
-            .apply()
+    private fun refreshServerList() {
+        val profiles = repository.getAllProfiles()
+        adapter.submitList(profiles)
+        binding.textServerCount.text = "${profiles.size} saved"
+        binding.layoutEmptyServers.visibility = if (profiles.isEmpty()) View.VISIBLE else View.GONE
     }
 
     private fun setupListeners() {
-        binding.btnConnect.setOnClickListener {
-            val currentState = client.state.value
-            if (currentState is VncConnectionState.Connected || currentState is VncConnectionState.Connecting) {
-                client.disconnect()
-            } else {
-                val host = binding.inputHost.text.toString().trim()
-                val portStr = binding.inputPort.text.toString().trim()
-                val password = binding.inputPassword.text.toString().trim()
-
-                if (host.isEmpty()) {
-                    Toast.makeText(this, "Please enter server IP", Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
-                }
-
-                val port = portStr.toIntOrNull() ?: 5901
-                savePreferences(host, port, password)
-                client.connect(host, port, password)
-            }
+        // Add Server button in toolbar
+        binding.btnAddServer.setOnClickListener {
+            showEditServerDialog(null)
         }
 
-        binding.btnKeyboard.setOnClickListener {
+        // Quick Direct Connect
+        binding.btnQuickConnect.setOnClickListener {
+            val host = binding.inputHost.text.toString().trim()
+            val portStr = binding.inputPort.text.toString().trim()
+            val password = binding.inputPassword.text.toString().trim()
+
+            if (host.isEmpty()) {
+                Snackbar.make(binding.root, "Please enter a host address", Snackbar.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val port = portStr.toIntOrNull() ?: 5901
+            activeProfileId = null
+            connectToServer(host, port, password)
+        }
+
+        // Cancel connection button
+        binding.btnCancelConnect.setOnClickListener {
+            client.disconnect()
+        }
+
+        // Floating HUD actions
+        binding.btnToggleKeyboard.setOnClickListener {
             val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
             imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0)
         }
 
-        binding.btnClipboard.setOnClickListener {
+        binding.btnSyncClipboard.setOnClickListener {
             val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clipData = clipboard.primaryClip
             if (clipData != null && clipData.itemCount > 0) {
                 val text = clipData.getItemAt(0).text?.toString()
                 if (!text.isNullOrEmpty()) {
                     client.sendClipboardText(text)
-                    Toast.makeText(this, "Sent to remote clipboard (${text.length} chars)", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Sent ${text.length} chars to remote clipboard", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(this, "Android clipboard is empty", Toast.LENGTH_SHORT).show()
                 }
@@ -105,9 +137,109 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        binding.btnToggleMouseMode.setOnClickListener {
+            binding.vncSurfaceView.isTrackpadMode = !binding.vncSurfaceView.isTrackpadMode
+            val isTrackpad = binding.vncSurfaceView.isTrackpadMode
+            val modeName = if (isTrackpad) getString(R.string.mode_trackpad) else getString(R.string.mode_touch)
+            Toast.makeText(this, "Switched to: $modeName", Toast.LENGTH_SHORT).show()
+            binding.btnToggleMouseMode.setColorFilter(
+                if (isTrackpad) getColor(R.color.primary_accent) else getColor(R.color.text_primary)
+            )
+        }
+
+        binding.btnQualityMenu.setOnClickListener { view ->
+            val popup = PopupMenu(this, view)
+            popup.menu.add(0, 1, 0, "Fast (40% | 20 FPS)")
+            popup.menu.add(0, 2, 1, "Balanced (70% | 30 FPS)")
+            popup.menu.add(0, 3, 2, "High Quality (90% | 45 FPS)")
+            popup.setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    1 -> { client.setQuality(40.toByte(), 20.toByte()); true }
+                    2 -> { client.setQuality(70.toByte(), 30.toByte()); true }
+                    3 -> { client.setQuality(90.toByte(), 45.toByte()); true }
+                    else -> false
+                }
+            }
+            popup.show()
+        }
+
+        binding.btnDisconnectSession.setOnClickListener {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.confirm_disconnect)
+                .setMessage("Are you sure you want to end this remote session?")
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.disconnect) { _, _ ->
+                    client.disconnect()
+                }
+                .show()
+        }
+
+        binding.btnCollapseHud.setOnClickListener {
+            val isVisible = binding.layoutHudActions.visibility == View.VISIBLE
+            binding.layoutHudActions.visibility = if (isVisible) View.GONE else View.VISIBLE
+        }
+
         binding.vncSurfaceView.onMouseInput = { mouseInput ->
             client.sendMouseInput(mouseInput)
         }
+    }
+
+    private fun connectToServer(host: String, port: Int, password: String) {
+        binding.textConnectingHost.text = "$host:$port"
+        binding.layoutConnectingProgress.visibility = View.VISIBLE
+        client.connect(host, port, password)
+    }
+
+    private fun showEditServerDialog(existing: ServerProfile?) {
+        val dialogBinding = DialogEditServerBinding.inflate(LayoutInflater.from(this))
+        val isEdit = existing != null
+
+        dialogBinding.dialogTitle.text = if (isEdit) getString(R.string.edit_server) else getString(R.string.add_server)
+        if (existing != null) {
+            dialogBinding.editServerName.setText(existing.name)
+            dialogBinding.editServerHost.setText(existing.host)
+            dialogBinding.editServerPort.setText(existing.port.toString())
+            dialogBinding.editServerPassword.setText(existing.password)
+        }
+
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setView(dialogBinding.root)
+            .create()
+
+        dialogBinding.btnDialogCancel.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        dialogBinding.btnDialogSave.setOnClickListener {
+            val name = dialogBinding.editServerName.text.toString().trim()
+            val host = dialogBinding.editServerHost.text.toString().trim()
+            val portStr = dialogBinding.editServerPort.text.toString().trim()
+            val password = dialogBinding.editServerPassword.text.toString().trim()
+
+            if (name.isEmpty() || host.isEmpty()) {
+                Toast.makeText(this, "Please enter both name and host", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val port = portStr.toIntOrNull() ?: 5901
+            val profile = existing?.apply {
+                this.name = name
+                this.host = host
+                this.port = port
+                this.password = password
+            } ?: ServerProfile(
+                name = name,
+                host = host,
+                port = port,
+                password = password
+            )
+
+            repository.saveProfile(profile)
+            refreshServerList()
+            dialog.dismiss()
+        }
+
+        dialog.show()
     }
 
     private fun observeClient() {
@@ -115,31 +247,43 @@ class MainActivity : AppCompatActivity() {
             client.state.collectLatest { state ->
                 when (state) {
                     is VncConnectionState.Disconnected -> {
-                        binding.textStatus.text = getString(R.string.status_disconnected)
-                        binding.btnConnect.text = getString(R.string.connect)
-                        binding.btnConnect.isEnabled = true
+                        binding.layoutConnectingProgress.visibility = View.GONE
+                        binding.layoutViewer.visibility = View.GONE
+                        binding.layoutDashboard.visibility = View.VISIBLE
+                        setImmersiveFullscreen(false)
+                        activeProfileId = null
                     }
                     is VncConnectionState.Connecting -> {
-                        binding.textStatus.text = getString(R.string.status_connecting)
-                        binding.btnConnect.text = getString(R.string.disconnect)
+                        binding.layoutConnectingProgress.visibility = View.VISIBLE
+                        binding.textConnectingStatus.text = getString(R.string.status_connecting)
                     }
                     is VncConnectionState.Handshaking -> {
-                        binding.textStatus.text = "Handshaking..."
+                        binding.layoutConnectingProgress.visibility = View.VISIBLE
+                        binding.textConnectingStatus.text = "Negotiating handshake..."
                     }
                     is VncConnectionState.Authenticating -> {
-                        binding.textStatus.text = "Authenticating..."
+                        binding.layoutConnectingProgress.visibility = View.VISIBLE
+                        binding.textConnectingStatus.text = "Authenticating..."
                     }
                     is VncConnectionState.Connected -> {
-                        binding.textStatus.text = "${getString(R.string.status_connected)} (${state.screenWidth}x${state.screenHeight})"
-                        binding.btnConnect.text = getString(R.string.disconnect)
+                        binding.layoutConnectingProgress.visibility = View.GONE
+                        binding.layoutDashboard.visibility = View.GONE
+                        binding.layoutViewer.visibility = View.VISIBLE
+                        setImmersiveFullscreen(true)
+
+                        activeProfileId?.let { id ->
+                            repository.updateLastConnected(id)
+                            refreshServerList()
+                        }
                     }
                     is VncConnectionState.Reconnecting -> {
-                        binding.textStatus.text = "Reconnecting (attempt ${state.attempt})..."
-                        binding.btnConnect.text = getString(R.string.disconnect)
+                        binding.textHudStats.text = "Reconnecting (${state.attempt})..."
                     }
                     is VncConnectionState.Error -> {
-                        binding.textStatus.text = "Error: ${state.message}"
-                        binding.btnConnect.text = getString(R.string.connect)
+                        binding.layoutConnectingProgress.visibility = View.GONE
+                        Snackbar.make(binding.root, "Error: ${state.message}", Snackbar.LENGTH_LONG)
+                            .setAction("Dismiss") {}
+                            .show()
                     }
                 }
             }
@@ -153,7 +297,7 @@ class MainActivity : AppCompatActivity() {
                 val now = System.currentTimeMillis()
                 if (now - lastFpsTimestamp >= 1000) {
                     currentFps = frameCount * 1000f / (now - lastFpsTimestamp)
-                    updateStats(currentFps, client.rttMs.value)
+                    updateStatsDisplay(currentFps, client.rttMs.value)
                     frameCount = 0
                     lastFpsTimestamp = now
                 }
@@ -162,7 +306,7 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             client.rttMs.collectLatest { rtt ->
-                updateStats(currentFps, rtt)
+                updateStatsDisplay(currentFps, rtt)
             }
         }
 
@@ -176,13 +320,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private var currentFps = 0f
-
-    private fun updateStats(fps: Float, rttMs: Long) {
-        binding.textStats.text = if (rttMs > 0) {
-            String.format(java.util.Locale.US, "%.0f FPS | %d ms", fps, rttMs)
+    private fun updateStatsDisplay(fps: Float, rttMs: Long) {
+        val statsText = if (rttMs > 0) {
+            String.format(Locale.US, "%.0f FPS | %d ms", fps, rttMs)
         } else {
-            String.format(java.util.Locale.US, "%.0f FPS", fps)
+            String.format(Locale.US, "%.0f FPS", fps)
+        }
+        binding.textHudStats.text = statsText
+    }
+
+    private fun setImmersiveFullscreen(fullscreen: Boolean) {
+        val controller = WindowInsetsControllerCompat(window, binding.root)
+        if (fullscreen) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        } else {
+            WindowCompat.setDecorFitsSystemWindows(window, true)
+            controller.show(WindowInsetsCompat.Type.systemBars())
         }
     }
 

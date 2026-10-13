@@ -101,9 +101,24 @@ Build a working, low-latency Windows VNC Server and Android VNC Client.
   - Cross-platform unit tests: `AudioFrame_Roundtrip_Succeeds` (C#) and `testAudioFrameRoundtrip` (Kotlin).
   - Test coverage: 42 server tests passing, 16 client tests passing, debug APK successfully assembled.
 
+- **Milestone 8 — Complete Android UI/UX Redesign & Modern Remote Desktop Experience:**
+  - Modern Obsidian & Slate Material Design 3 theme with consistent spacing, typography, and dark mode palette.
+  - Server Dashboard & Device List: Saved desktop cards (`ServerProfile`) with alias, host:port, last connected badge, connect action, and edit/delete menu.
+  - Server Management: Material dialog for adding/editing saved desktops with validation and JSON SharedPreferences persistence.
+  - Quick Direct Connect: Sleek card allowing instant connection to any IP without saving.
+  - Visual Connection Flow: Modal progress indicator displaying granular stages (Connecting, Handshaking, Authenticating) with cancellation support.
+  - Immersive Fullscreen VNC Viewer: Fullscreen canvas with transient system bar hiding via `WindowInsetsControllerCompat`.
+  - Floating Translucent Control Pill HUD: Unobtrusive overlay displaying real-time FPS/RTT, collapsible to a minimal pill, with quick action controls:
+    - ⌨️ Keyboard toggle
+    - 📋 Clipboard sync
+    - 🖱️ Mouse Mode toggle: Direct Touch vs Virtual Trackpad (with crisp on-screen arrow pointer)
+    - ⚙️ Quality menu: Fast (40%), Balanced (70%), High (90%)
+    - ❌ Disconnect confirmation dialog
+  - Test coverage: 42 server tests passing, 16 client tests passing, debug APK successfully assembled.
+
 ## In Progress
 
-None. Milestones 1 through 7 are completely implemented, verified, tested, and checkpointed.
+None. Milestones 1 through 8 are completely implemented, verified, tested, and checkpointed.
 
 ## Known Problems
 
@@ -111,24 +126,30 @@ None.
 
 ## Tests
 
-- Windows Server Tests: `dotnet test server/VncServer.sln` — 42 passed, 0 failed, 0 skipped (~474 ms).
+- Windows Server Tests: `dotnet test server/VncServer.sln` — 42 passed, 0 failed, 0 skipped (~401 ms).
 - Android Client Tests: `gradlew test` (in `client/`) — 16 passed, 0 failed, 0 skipped (Debug + Release unit test passes).
-- Android APK Assembly: `gradlew assembleDebug` (in `client/`) — BUILD SUCCESSFUL (output: `app-debug.apk`).
+- Android APK Assembly: `gradlew assembleDebug` (in `client/`) — BUILD SUCCESSFUL (output: `app-debug.apk`, updated in `dist/ThanhVNC.apk`).
 
 ## Changed Files
 
 - `PROJECT_STATUS.md`
-- `server/src/VncServer.Core/Protocol/VncMessages.cs`
-- `server/src/VncServer.Core/Protocol/VncProtocol.cs`
-- `tests/VncServer.Tests/ProtocolTests.cs`
-- `tests/VncServer.Tests/ServerIntegrationTests.cs`
-- `client/app/src/main/java/com/thanhvnc/client/protocol/VncMessages.kt`
-- `client/app/src/main/java/com/thanhvnc/client/protocol/VncProtocol.kt`
-- `client/app/src/test/java/com/thanhvnc/client/VncProtocolTest.kt`
+- `client/app/src/main/java/com/thanhvnc/client/model/ServerProfile.kt`
+- `client/app/src/main/java/com/thanhvnc/client/model/ServerProfileRepository.kt`
+- `client/app/src/main/java/com/thanhvnc/client/ui/ServerProfileAdapter.kt`
+- `client/app/src/main/java/com/thanhvnc/client/ui/VncSurfaceView.kt`
+- `client/app/src/main/java/com/thanhvnc/client/ui/MainActivity.kt`
+- `client/app/src/main/res/drawable/bg_avatar_circle.xml`
+- `client/app/src/main/res/drawable/bg_control_pill.xml`
+- `client/app/src/main/res/layout/item_server_profile.xml`
+- `client/app/src/main/res/layout/dialog_edit_server.xml`
+- `client/app/src/main/res/layout/activity_main.xml`
+- `client/app/src/main/res/values/colors.xml`
+- `client/app/src/main/res/values/strings.xml`
+- `client/app/src/main/res/values/themes.xml`
 
 ## Next Action
 
-Deploy Windows Server on host PC and Android Client APK to physical mobile device for live interactive field testing.
+Deploy Windows Server on host PC and Android Client APK (`dist/ThanhVNC.apk`) to physical mobile device for live interactive field testing.
 
 ## Resume Instructions
 

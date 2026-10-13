@@ -31,6 +31,23 @@ class VncSurfaceView @JvmOverloads constructor(
     var remoteHeight: Int = 1080
     var onMouseInput: ((MouseInput) -> Unit)? = null
 
+    var isTrackpadMode: Boolean = false
+    private var cursorX: Float = 960f
+    private var cursorY: Float = 540f
+
+    private val cursorFillPaint = Paint().apply {
+        color = Color.WHITE
+        style = Paint.Style.FILL
+        isAntiAlias = true
+    }
+    private val cursorBorderPaint = Paint().apply {
+        color = Color.BLACK
+        style = Paint.Style.STROKE
+        strokeWidth = 2.5f
+        isAntiAlias = true
+    }
+    private val cursorPath = Path()
+
     private var videoDstRect = RectF()
     private var lastTwoFingerY = 0f
 
@@ -38,15 +55,22 @@ class VncSurfaceView @JvmOverloads constructor(
         override fun onDown(e: MotionEvent): Boolean = true
 
         override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-            val (rx, ry) = mapToRemote(e.x, e.y) ?: return false
+            val (rx, ry) = if (isTrackpadMode) {
+                Pair(cursorX.toInt(), cursorY.toInt())
+            } else {
+                mapToRemote(e.x, e.y) ?: return false
+            }
             onMouseInput?.invoke(MouseInput(MouseFlags.LEFT_DOWN, rx, ry, 0))
             onMouseInput?.invoke(MouseInput(MouseFlags.LEFT_UP, rx, ry, 0))
             return true
         }
 
         override fun onDoubleTap(e: MotionEvent): Boolean {
-            val (rx, ry) = mapToRemote(e.x, e.y) ?: return false
-            // Send rapid double click sequence
+            val (rx, ry) = if (isTrackpadMode) {
+                Pair(cursorX.toInt(), cursorY.toInt())
+            } else {
+                mapToRemote(e.x, e.y) ?: return false
+            }
             onMouseInput?.invoke(MouseInput(MouseFlags.LEFT_DOWN, rx, ry, 0))
             onMouseInput?.invoke(MouseInput(MouseFlags.LEFT_UP, rx, ry, 0))
             onMouseInput?.invoke(MouseInput(MouseFlags.LEFT_DOWN, rx, ry, 0))
@@ -55,15 +79,29 @@ class VncSurfaceView @JvmOverloads constructor(
         }
 
         override fun onLongPress(e: MotionEvent) {
-            val (rx, ry) = mapToRemote(e.x, e.y) ?: return
+            val (rx, ry) = if (isTrackpadMode) {
+                Pair(cursorX.toInt(), cursorY.toInt())
+            } else {
+                mapToRemote(e.x, e.y) ?: return
+            }
             onMouseInput?.invoke(MouseInput(MouseFlags.RIGHT_DOWN, rx, ry, 0))
             onMouseInput?.invoke(MouseInput(MouseFlags.RIGHT_UP, rx, ry, 0))
         }
 
         override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
             if (e2.pointerCount == 1) {
-                val (rx, ry) = mapToRemote(e2.x, e2.y) ?: return false
-                onMouseInput?.invoke(MouseInput(MouseFlags.MOVE, rx, ry, 0))
+                if (isTrackpadMode) {
+                    if (videoDstRect.width() > 0f && videoDstRect.height() > 0f) {
+                        val scaleX = remoteWidth / videoDstRect.width()
+                        val scaleY = remoteHeight / videoDstRect.height()
+                        cursorX = (cursorX - distanceX * scaleX).coerceIn(0f, (remoteWidth - 1).toFloat())
+                        cursorY = (cursorY - distanceY * scaleY).coerceIn(0f, (remoteHeight - 1).toFloat())
+                        onMouseInput?.invoke(MouseInput(MouseFlags.MOVE, cursorX.toInt(), cursorY.toInt(), 0))
+                    }
+                } else {
+                    val (rx, ry) = mapToRemote(e2.x, e2.y) ?: return false
+                    onMouseInput?.invoke(MouseInput(MouseFlags.MOVE, rx, ry, 0))
+                }
                 return true
             }
             return false
@@ -179,6 +217,10 @@ class VncSurfaceView @JvmOverloads constructor(
                             computeDstRect(canvas.width, canvas.height)
                             canvas.drawRect(0f, 0f, canvas.width.toFloat(), canvas.height.toFloat(), bgPaint)
                             canvas.drawBitmap(bitmap, null, videoDstRect, paint)
+
+                            if (isTrackpadMode) {
+                                drawCursor(canvas)
+                            }
                         }
                     } finally {
                         if (canvas != null) {
@@ -195,5 +237,24 @@ class VncSurfaceView @JvmOverloads constructor(
                 }
             }
         }
+    }
+
+    private fun drawCursor(canvas: Canvas) {
+        if (remoteWidth <= 0 || remoteHeight <= 0 || videoDstRect.width() <= 0f) return
+        val cx = videoDstRect.left + (cursorX / remoteWidth) * videoDstRect.width()
+        val cy = videoDstRect.top + (cursorY / remoteHeight) * videoDstRect.height()
+
+        cursorPath.reset()
+        cursorPath.moveTo(cx, cy)
+        cursorPath.lineTo(cx, cy + 26f)
+        cursorPath.lineTo(cx + 7f, cy + 19f)
+        cursorPath.lineTo(cx + 13f, cy + 28f)
+        cursorPath.lineTo(cx + 17f, cy + 25f)
+        cursorPath.lineTo(cx + 11f, cy + 17f)
+        cursorPath.lineTo(cx + 19f, cy + 17f)
+        cursorPath.close()
+
+        canvas.drawPath(cursorPath, cursorBorderPaint)
+        canvas.drawPath(cursorPath, cursorFillPaint)
     }
 }

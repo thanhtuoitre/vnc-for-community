@@ -1,12 +1,28 @@
 <resources>
-    <string name="app_name">ThanhVNC Client</string>
+    <string name="app_name">ThanhVNC</string>
     <string name="connect">Connect</string>
     <string name="disconnect">Disconnect</string>
-    <string name="host_hint">Server IP (e.g. 192.168.1.10)</string>
-    <string name="port_hint">Port (5901)</string>
+    <string name="host_hint">Server Host / IP</string>
+    <string name="port_hint">Port</string>
     <string name="password_hint">Password</string>
-    <string name="status_disconnected">Disconnected</string>
+    <string name="server_name_hint">Server Name (e.g. Office PC)</string>
+    <string name="status_disconnected">Ready to Connect</string>
     <string name="status_connecting">Connecting...</string>
     <string name="status_connected">Connected</string>
     <string name="toggle_keyboard">Keyboard</string>
+    <string name="saved_servers">Saved Desktops</string>
+    <string name="quick_connect">Direct Connect</string>
+    <string name="add_server">Add Server</string>
+    <string name="edit_server">Edit Server</string>
+    <string name="delete_server">Delete Server</string>
+    <string name="no_servers_title">No Desktops Saved</string>
+    <string name="no_servers_desc">Add your Windows PC to quickly reconnect anytime.</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete">Delete</string>
+    <string name="clipboard">Clipboard</string>
+    <string name="sync_clipboard">Sync Clipboard</string>
+    <string name="mode_touch">Direct Touch</string>
+    <string name="mode_trackpad">Trackpad Mouse</string>
+    <string name="confirm_disconnect">Disconnect session?</string>
 </resources>
