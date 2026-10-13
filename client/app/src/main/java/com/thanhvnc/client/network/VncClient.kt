@@ -1,0 +1,176 @@
+package com.thanhvnc.client.network
+
+import com.thanhvnc.client.protocol.*
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
+import java.net.InetSocketAddress
+import java.net.Socket
+
+sealed class VncConnectionState {
+    data object Disconnected : VncConnectionState()
+    data object Connecting : VncConnectionState()
+    data object Handshaking : VncConnectionState()
+    data object Authenticating : VncConnectionState()
+    data class Connected(val screenWidth: Int, val screenHeight: Int) : VncConnectionState()
+    data class Error(val message: String) : VncConnectionState()
+}
+
+class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())) {
+
+    private val _state = MutableStateFlow<VncConnectionState>(VncConnectionState.Disconnected)
+    val state: StateFlow<VncConnectionState> = _state.asStateFlow()
+
+    private val _frames = MutableSharedFlow<ScreenFrame>(extraBufferCapacity = 2)
+    val frames: SharedFlow<ScreenFrame> = _frames.asSharedFlow()
+
+    private var socket: Socket? = null
+    private var job: Job? = null
+
+    // Channel for immediate priority transmission of input packets (bypassing frame reads)
+    private val outgoingPackets = Channel<Pair<VncMessageType, ByteArray>>(Channel.BUFFERED)
+
+    var screenWidth: Int = 1920
+        private set
+    var screenHeight: Int = 1080
+        private set
+
+    fun connect(host: String, port: Int, password: String) {
+        disconnect()
+        job = clientScope.launch {
+            try {
+                _state.value = VncConnectionState.Connecting
+                val s = Socket()
+                s.tcpNoDelay = true
+                s.connect(InetSocketAddress(host, port), 5000)
+                socket = s
+
+                val inputStream = BufferedInputStream(s.getInputStream())
+                val outputStream = BufferedOutputStream(s.getOutputStream())
+
+                // 1. Handshake
+                _state.value = VncConnectionState.Handshaking
+                val handshakeReq = HandshakeRequest(VncProtocol.CURRENT_VERSION, "AndroidClient")
+                sendPacketDirect(outputStream, VncMessageType.HandshakeRequest, VncProtocol.serializeHandshakeRequest(handshakeReq))
+
+                val (resType, resPayload) = readPacket(inputStream)
+                if (resType != VncMessageType.HandshakeResponse) {
+                    throw IllegalStateException("Expected HandshakeResponse, got $resType")
+                }
+                val handshakeRes = VncProtocol.deserializeHandshakeResponse(resPayload)
+                screenWidth = handshakeRes.screenWidth
+                screenHeight = handshakeRes.screenHeight
+
+                // 2. Authentication
+                _state.value = VncConnectionState.Authenticating
+                val signature = HmacAuth.computeHmac(handshakeRes.challenge, password)
+                val authReq = AuthRequest(signature)
+                sendPacketDirect(outputStream, VncMessageType.AuthRequest, VncProtocol.serializeAuthRequest(authReq))
+
+                val (authType, authPayload) = readPacket(inputStream)
+                if (authType != VncMessageType.AuthResponse) {
+                    throw IllegalStateException("Expected AuthResponse, got $authType")
+                }
+                val authRes = VncProtocol.deserializeAuthResponse(authPayload)
+                if (authRes.statusCode.toInt() != 0) {
+                    throw SecurityException("Authentication rejected by server (code ${authRes.statusCode})")
+                }
+
+                _state.value = VncConnectionState.Connected(screenWidth, screenHeight)
+
+                // 3. Start dual pipelines: Send input channel + Receive frame loop
+                val sendJob = launch {
+                    for ((type, payload) in outgoingPackets) {
+                        sendPacketDirect(outputStream, type, payload)
+                    }
+                }
+
+                try {
+                    while (isActive) {
+                        val (type, payload) = readPacket(inputStream)
+                        when (type) {
+                            VncMessageType.ScreenFrame -> {
+                                val frame = VncProtocol.deserializeScreenFrame(payload)
+                                _frames.tryEmit(frame)
+                            }
+                            VncMessageType.Heartbeat -> {
+                                // Acknowledge heartbeat
+                                outgoingPackets.trySend(Pair(VncMessageType.Heartbeat, payload))
+                            }
+                            VncMessageType.Disconnect -> {
+                                break
+                            }
+                            else -> Unit
+                        }
+                    }
+                } finally {
+                    sendJob.cancel()
+                }
+
+            } catch (e: Exception) {
+                if (isActive) {
+                    _state.value = VncConnectionState.Error(e.message ?: "Connection error")
+                }
+            } finally {
+                cleanup()
+                if (_state.value !is VncConnectionState.Error) {
+                    _state.value = VncConnectionState.Disconnected
+                }
+            }
+        }
+    }
+
+    fun sendMouseInput(input: MouseInput) {
+        outgoingPackets.trySend(Pair(VncMessageType.MouseInput, VncProtocol.serializeMouseInput(input)))
+    }
+
+    fun sendKeyboardInput(input: KeyboardInput) {
+        outgoingPackets.trySend(Pair(VncMessageType.KeyboardInput, VncProtocol.serializeKeyboardInput(input)))
+    }
+
+    fun disconnect() {
+        job?.cancel()
+        job = null
+        cleanup()
+        _state.value = VncConnectionState.Disconnected
+    }
+
+    private fun cleanup() {
+        try {
+            socket?.close()
+        } catch (_: Exception) {}
+        socket = null
+    }
+
+    private fun readPacket(stream: BufferedInputStream): Pair<VncMessageType, ByteArray> {
+        val header = ByteArray(VncProtocol.HEADER_SIZE)
+        VncProtocol.readExactly(stream, header, header.size)
+
+        val parsed = VncProtocol.parseHeader(header)
+            ?: throw IllegalStateException("Invalid packet header from server")
+
+        val (type, payloadLength) = parsed
+        val payload = ByteArray(payloadLength)
+        if (payloadLength > 0) {
+            VncProtocol.readExactly(stream, payload, payloadLength)
+        }
+        return Pair(type, payload)
+    }
+
+    private fun sendPacketDirect(stream: BufferedOutputStream, type: VncMessageType, payload: ByteArray) {
+        val header = ByteArray(VncProtocol.HEADER_SIZE)
+        VncProtocol.writeHeader(header, type, payload.size)
+        stream.write(header)
+        if (payload.isNotEmpty()) {
+            stream.write(payload)
+        }
+        stream.flush()
+    }
+}

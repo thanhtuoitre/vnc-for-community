@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">ThanhVNC Client</string>
+    <string name="connect">Connect</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="host_hint">Server IP (e.g. 192.168.1.10)</string>
+    <string name="port_hint">Port (5901)</string>
+    <string name="password_hint">Password</string>
+    <string name="status_disconnected">Disconnected</string>
+    <string name="status_connecting">Connecting...</string>
+    <string name="status_connected">Connected</string>
+    <string name="toggle_keyboard">Keyboard</string>
+</resources>

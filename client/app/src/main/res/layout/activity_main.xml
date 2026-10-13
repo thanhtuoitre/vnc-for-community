@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/dark_bg"
+    android:orientation="vertical">
+
+    <!-- Top Connection Bar -->
+    <LinearLayout
+        android:id="@+id/connectionBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/surface_dark"
+        android:elevation="4dp"
+        android:orientation="horizontal"
+        android:padding="8dp">
+
+        <EditText
+            android:id="@+id/inputHost"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="3"
+            android:background="@android:color/transparent"
+            android:hint="@string/host_hint"
+            android:inputType="textUri"
+            android:paddingHorizontal="8dp"
+            android:textColor="@color/white"
+            android:textColorHint="@color/text_secondary"
+            android:textSize="14sp" />
+
+        <EditText
+            android:id="@+id/inputPort"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1.2"
+            android:background="@android:color/transparent"
+            android:hint="@string/port_hint"
+            android:inputType="number"
+            android:paddingHorizontal="4dp"
+            android:text="5901"
+            android:textColor="@color/white"
+            android:textColorHint="@color/text_secondary"
+            android:textSize="14sp" />
+
+        <EditText
+            android:id="@+id/inputPassword"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="2"
+            android:background="@android:color/transparent"
+            android:hint="@string/password_hint"
+            android:inputType="textPassword"
+            android:paddingHorizontal="4dp"
+            android:text="vncsecret"
+            android:textColor="@color/white"
+            android:textColorHint="@color/text_secondary"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/btnConnect"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginStart="4dp"
+            android:backgroundTint="@color/primary_accent"
+            android:text="@string/connect"
+            android:textColor="@color/white"
+            android:textSize="12sp" />
+
+        <ImageButton
+            android:id="@+id/btnKeyboard"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/toggle_keyboard"
+            android:src="@android:drawable/ic_input_get" />
+    </LinearLayout>
+
+    <!-- Status & Metrics bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/surface_dark"
+        android:orientation="horizontal"
+        android:paddingHorizontal="8dp"
+        android:paddingBottom="4dp">
+
+        <TextView
+            android:id="@+id/textStatus"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/status_disconnected"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/textStats"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0 FPS"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- Remote Screen SurfaceView -->
+    <com.thanhvnc.client.ui.VncSurfaceView
+        android:id="@+id/vncSurfaceView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+</LinearLayout>
