@@ -106,12 +106,28 @@ class MainActivity : AppCompatActivity() {
                 frameCount++
                 val now = System.currentTimeMillis()
                 if (now - lastFpsTimestamp >= 1000) {
-                    val fps = frameCount * 1000f / (now - lastFpsTimestamp)
-                    binding.textStats.text = String.format("%.0f FPS", fps)
+                    currentFps = frameCount * 1000f / (now - lastFpsTimestamp)
+                    updateStats(currentFps, client.rttMs.value)
                     frameCount = 0
                     lastFpsTimestamp = now
                 }
             }
+        }
+
+        lifecycleScope.launch {
+            client.rttMs.collectLatest { rtt ->
+                updateStats(currentFps, rtt)
+            }
+        }
+    }
+
+    private var currentFps = 0f
+
+    private fun updateStats(fps: Float, rttMs: Long) {
+        binding.textStats.text = if (rttMs > 0) {
+            String.format(java.util.Locale.US, "%.0f FPS | %d ms", fps, rttMs)
+        } else {
+            String.format(java.util.Locale.US, "%.0f FPS", fps)
         }
     }
 

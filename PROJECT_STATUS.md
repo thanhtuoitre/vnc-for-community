@@ -75,9 +75,16 @@ Build a working, low-latency Windows VNC Server and Android VNC Client.
   - Periodic heartbeat keepalive (5s) for silent drop detection.
   - Complete test verification across server and client suites.
 
+- **Milestone 4 — Telemetry, Adaptive Streaming & WAN Deployment:**
+  - Round-trip time (RTT) calculation in Android client via 5-second Heartbeat echoes.
+  - Real-time telemetry HUD displaying live FPS and latency (e.g. `30 FPS | 18 ms`) in `MainActivity.kt`.
+  - Dynamic client-side quality throttling: automatically steps down to 40% quality and 20 FPS when RTT > 200 ms, recovers to 70% quality and 30 FPS when RTT < 60 ms.
+  - Heartbeat packet serialization and deserialization unit tests in `VncProtocolTest.kt`.
+  - Comprehensive WAN & Remote Deployment Guide created in `docs/WAN_DEPLOYMENT.md` covering LAN firewall rules, router port-forwarding, Tailscale/WireGuard zero-config mesh VPNs, and STUN/TURN relay roadmap.
+
 ## In Progress
 
-- Milestone 4: Performance monitoring telemetry, WAN NAT-traversal / relay architecture specification, and documentation.
+None. All four planned milestones (Server Engine, Android Client, Adaptive Resilience, Telemetry & WAN) are fully implemented, verified, and passing tests.
 
 ## Known Problems
 
@@ -85,30 +92,22 @@ None.
 
 ## Tests
 
-- Windows Server Tests: `dotnet test server/VncServer.sln` — 35 passed, 0 failed, 0 skipped (~265 ms).
-- Android Client Tests: `gradlew test` (in `client/`) — 13 passed, 0 failed, 0 skipped.
+- Windows Server Tests: `dotnet test server/VncServer.sln` — 35 passed, 0 failed, 0 skipped (~267 ms).
+- Android Client Tests: `gradlew test` (in `client/`) — 14 passed, 0 failed, 0 skipped (Debug + Release unit test passes).
 - Android APK Assembly: `gradlew assembleDebug` (in `client/`) — BUILD SUCCESSFUL (output: `app-debug.apk`).
 
 ## Changed Files
 
 - `PROJECT_STATUS.md`
-- `server/src/VncServer.Core/Protocol/VncMessages.cs`
-- `server/src/VncServer.Core/Protocol/VncProtocol.cs`
-- `server/src/VncServer.Core/Capture/ScreenCapture.cs`
-- `server/src/VncServer.Core/Server/VncSession.cs`
-- `tests/VncServer.Tests/ProtocolTests.cs`
-- `tests/VncServer.Tests/CaptureAndInputTests.cs`
-- `tests/VncServer.Tests/ServerIntegrationTests.cs`
-- `client/app/src/main/java/com/thanhvnc/client/protocol/VncMessages.kt`
+- `docs/WAN_DEPLOYMENT.md`
 - `client/app/src/main/java/com/thanhvnc/client/protocol/VncProtocol.kt`
 - `client/app/src/main/java/com/thanhvnc/client/network/VncClient.kt`
 - `client/app/src/main/java/com/thanhvnc/client/ui/MainActivity.kt`
 - `client/app/src/test/java/com/thanhvnc/client/VncProtocolTest.kt`
-- `client/app/src/test/java/com/thanhvnc/client/AutoReconnectBackoffTest.kt`
 
 ## Next Action
 
-Milestone 4: Add round-trip latency measurement telemetry, document WAN deployment & port-forwarding / STUN-relay recommendations, and finalize milestone checkpoint.
+End-to-end manual verification on physical Android device connected to Windows host across Wi-Fi or Tailscale network. Optional future enhancements: remote clipboard sharing or Opus audio streaming.
 
 ## Resume Instructions
 

@@ -117,6 +117,12 @@ object VncProtocol {
         return buf.array()
     }
 
+    fun deserializeHeartbeat(payload: ByteArray): Heartbeat {
+        require(payload.size >= 8) { "Heartbeat payload too short" }
+        val buf = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
+        return Heartbeat(buf.long)
+    }
+
     fun serializeDisconnect(msg: DisconnectMessage): ByteArray = byteArrayOf(msg.reasonCode)
 
     fun serializeQualityControl(qc: QualityControl): ByteArray = byteArrayOf(qc.quality, qc.targetFps)

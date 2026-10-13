@@ -32,6 +32,12 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
     private val _frames = MutableSharedFlow<ScreenFrame>(extraBufferCapacity = 2)
     val frames: SharedFlow<ScreenFrame> = _frames.asSharedFlow()
 
+    private val _rttMs = MutableStateFlow(0L)
+    val rttMs: StateFlow<Long> = _rttMs.asStateFlow()
+
+    private var currentQuality: Byte = 70
+    private var currentFps: Byte = 30
+
     private var socket: Socket? = null
     private var job: Job? = null
     private var isManualDisconnect = false
@@ -147,7 +153,16 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
                         _frames.tryEmit(frame)
                     }
                     VncMessageType.Heartbeat -> {
-                        // Heartbeat echo received from server
+                        val hb = VncProtocol.deserializeHeartbeat(payload)
+                        val rtt = System.currentTimeMillis() - hb.timestampMs
+                        if (rtt >= 0) {
+                            _rttMs.value = rtt
+                            if (rtt > 200 && currentQuality > 40) {
+                                setQuality(40.toByte(), 20.toByte())
+                            } else if (rtt < 60 && currentQuality < 70) {
+                                setQuality(70.toByte(), 30.toByte())
+                            }
+                        }
                     }
                     VncMessageType.Disconnect -> {
                         break
@@ -170,6 +185,8 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
     }
 
     fun setQuality(quality: Byte, targetFps: Byte) {
+        currentQuality = quality
+        currentFps = targetFps
         val qc = QualityControl(quality, targetFps)
         outgoingPackets.trySend(Pair(VncMessageType.QualityControl, VncProtocol.serializeQualityControl(qc)))
     }

@@ -140,4 +140,19 @@ class VncProtocolTest {
         assertEquals(original.quality, deserialized.quality)
         assertEquals(original.targetFps, deserialized.targetFps)
     }
+
+    @Test
+    fun testHeartbeatRoundtripAndRtt() {
+        val sendTime = 1700000000000L
+        val original = Heartbeat(sendTime)
+        val serialized = VncProtocol.serializeHeartbeat(original)
+        assertEquals(8, serialized.size)
+
+        val deserialized = VncProtocol.deserializeHeartbeat(serialized)
+        assertEquals(sendTime, deserialized.timestampMs)
+
+        val receiveTime = sendTime + 42L
+        val rtt = receiveTime - deserialized.timestampMs
+        assertEquals(42L, rtt)
+    }
 }
