@@ -180,4 +180,19 @@ public class ProtocolTests
 
         Assert.Equal(text, deserialized.Text);
     }
+
+    [Fact]
+    public void AudioFrame_Roundtrip_Succeeds()
+    {
+        byte[] pcmData = [0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC];
+        var original = new AudioFrame(54321, 48000, 2, 1, pcmData);
+        byte[] serialized = VncProtocol.SerializeAudioFrame(original);
+        var deserialized = VncProtocol.DeserializeAudioFrame(serialized);
+
+        Assert.Equal(original.TimestampMs, deserialized.TimestampMs);
+        Assert.Equal(original.SampleRate, deserialized.SampleRate);
+        Assert.Equal(original.Channels, deserialized.Channels);
+        Assert.Equal(original.Codec, deserialized.Codec);
+        Assert.Equal(original.Data, deserialized.Data);
+    }
 }

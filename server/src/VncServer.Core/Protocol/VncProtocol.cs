@@ -251,6 +251,36 @@ public static class VncProtocol
         return new ClipboardMessage(Encoding.UTF8.GetString(payload));
     }
 
+    public static byte[] SerializeAudioFrame(AudioFrame frame)
+    {
+        const int metaLen = 4 + 2 + 1 + 1;
+        byte[] buffer = new byte[metaLen + frame.Data.Length];
+        var span = buffer.AsSpan();
+
+        BinaryPrimitives.WriteUInt32LittleEndian(span[..4], frame.TimestampMs);
+        BinaryPrimitives.WriteUInt16LittleEndian(span.Slice(4, 2), frame.SampleRate);
+        span[6] = frame.Channels;
+        span[7] = frame.Codec;
+        frame.Data.CopyTo(span[8..]);
+
+        return buffer;
+    }
+
+    public static AudioFrame DeserializeAudioFrame(ReadOnlySpan<byte> payload)
+    {
+        const int metaLen = 8;
+        if (payload.Length < metaLen)
+            throw new FormatException("Audio frame payload too short");
+
+        uint timestampMs = BinaryPrimitives.ReadUInt32LittleEndian(payload[..4]);
+        ushort sampleRate = BinaryPrimitives.ReadUInt16LittleEndian(payload.Slice(4, 2));
+        byte channels = payload[6];
+        byte codec = payload[7];
+        byte[] data = payload[8..].ToArray();
+
+        return new AudioFrame(timestampMs, sampleRate, channels, codec, data);
+    }
+
     public static byte[] GenerateChallenge(int length = 32)
     {
         byte[] challenge = new byte[length];

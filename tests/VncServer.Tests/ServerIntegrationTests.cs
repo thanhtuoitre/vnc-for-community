@@ -138,4 +138,65 @@ public class ServerIntegrationTests
 
         await server.StopAsync();
     }
+
+    [Fact]
+    public async Task EndToEnd_ClipboardSync_And_HeartbeatEcho_Succeeds()
+    {
+        const int port = 5921;
+        const string password = "E2EHeartbeatPassword789";
+
+        await using var server = new VncServerHost(port, password, 50);
+        server.Start();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var ct = cts.Token;
+
+        using var client = new TcpClient();
+        await client.ConnectAsync("127.0.0.1", port, ct);
+        var stream = client.GetStream();
+
+        // 1. Handshake
+        var handshakeReq = new HandshakeRequest(VncProtocol.CurrentVersion, "HeartbeatTestClient");
+        await SendPacketAsync(stream, VncMessageType.HandshakeRequest, VncProtocol.SerializeHandshakeRequest(handshakeReq), ct);
+        var (_, respPayload) = await ReadPacketAsync(stream, ct);
+        var handshakeResp = VncProtocol.DeserializeHandshakeResponse(respPayload);
+
+        // 2. Auth
+        byte[] sig = VncProtocol.ComputeHmac(handshakeResp.Challenge, password);
+        await SendPacketAsync(stream, VncMessageType.AuthRequest, VncProtocol.SerializeAuthRequest(new AuthRequest(sig)), ct);
+        var (authRespType, authRespPayload) = await ReadPacketAsync(stream, ct);
+        Assert.Equal(VncMessageType.AuthResponse, authRespType);
+        Assert.Equal(0, VncProtocol.DeserializeAuthResponse(authRespPayload).StatusCode);
+
+        // 3. Heartbeat echo
+        long sentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        await SendPacketAsync(stream, VncMessageType.Heartbeat, VncProtocol.SerializeHeartbeat(new Heartbeat(sentTimestamp)), ct);
+
+        // Read next packets until we get Heartbeat (ignoring screen frames if any)
+        bool gotHeartbeatEcho = false;
+        while (!gotHeartbeatEcho)
+        {
+            var (type, payload) = await ReadPacketAsync(stream, ct);
+            if (type == VncMessageType.Heartbeat)
+            {
+                var echoed = VncProtocol.DeserializeHeartbeat(payload);
+                Assert.Equal(sentTimestamp, echoed.TimestampMs);
+                gotHeartbeatEcho = true;
+            }
+        }
+
+        // 4. Send ClipboardText
+        var clipMsg = new ClipboardMessage("End-to-end integration test clipboard payload");
+        await SendPacketAsync(stream, VncMessageType.ClipboardText, VncProtocol.SerializeClipboard(clipMsg), ct);
+
+        // 5. Send KeyboardInput
+        var kb = new KeyboardInput(KeyFlags.KeyDown, 0x41, 0); // 'A' key
+        await SendPacketAsync(stream, VncMessageType.KeyboardInput, VncProtocol.SerializeKeyboardInput(kb), ct);
+
+        // 6. Clean Disconnect
+        await SendPacketAsync(stream, VncMessageType.Disconnect, VncProtocol.SerializeDisconnect(new DisconnectMessage(0)), ct);
+
+        await Task.Delay(100, CancellationToken.None);
+        await server.StopAsync();
+    }
 }

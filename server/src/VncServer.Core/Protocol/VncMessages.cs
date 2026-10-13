@@ -14,7 +14,8 @@ public enum VncMessageType : byte
     Heartbeat = 8,
     Disconnect = 9,
     QualityControl = 10,
-    ClipboardText = 11
+    ClipboardText = 11,
+    AudioFrame = 12
 }
 
 [Flags]
@@ -69,3 +70,5 @@ public sealed record DisconnectMessage(byte ReasonCode);
 public sealed record QualityControl(byte Quality, byte TargetFps);
 
 public sealed record ClipboardMessage(string Text);
+
+public sealed record AudioFrame(uint TimestampMs, ushort SampleRate, byte Channels, byte Codec, byte[] Data);

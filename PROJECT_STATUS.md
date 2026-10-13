@@ -95,9 +95,15 @@ Build a working, low-latency Windows VNC Server and Android VNC Client.
   - Connection Settings Persistence: `MainActivity.kt` persists host, port, and password to Android `SharedPreferences` to restore connection profiles across app sessions.
   - Full test verification: 40 server tests passed (including rate-limiter tests), 15 client tests passed, debug APK successfully assembled.
 
+- **Milestone 7 — Audio Streaming Foundation & End-to-End Loopback Verification:**
+  - Wire Protocol `AudioFrame` (Type 12): Contract-first binary framing in C# and Kotlin supporting Opus/PCM16 audio packets (`TimestampMs`, `SampleRate`, `Channels`, `Codec`, `Data`).
+  - Automated Loopback Integration Suite: `EndToEnd_ClipboardSync_And_HeartbeatEcho_Succeeds` in `ServerIntegrationTests.cs` verifying full-stack live socket negotiation, challenge-response auth, bidirectional clipboard sync, heartbeat latency echoes, and keyboard input simulation.
+  - Cross-platform unit tests: `AudioFrame_Roundtrip_Succeeds` (C#) and `testAudioFrameRoundtrip` (Kotlin).
+  - Test coverage: 42 server tests passing, 16 client tests passing, debug APK successfully assembled.
+
 ## In Progress
 
-None. Milestones 1 through 6 are fully implemented, verified, tested, and checkpointed.
+None. Milestones 1 through 7 are completely implemented, verified, tested, and checkpointed.
 
 ## Known Problems
 
@@ -105,24 +111,24 @@ None.
 
 ## Tests
 
-- Windows Server Tests: `dotnet test server/VncServer.sln` — 40 passed, 0 failed, 0 skipped (~360 ms).
-- Android Client Tests: `gradlew test` (in `client/`) — 15 passed, 0 failed, 0 skipped (Debug + Release unit test passes).
+- Windows Server Tests: `dotnet test server/VncServer.sln` — 42 passed, 0 failed, 0 skipped (~474 ms).
+- Android Client Tests: `gradlew test` (in `client/`) — 16 passed, 0 failed, 0 skipped (Debug + Release unit test passes).
 - Android APK Assembly: `gradlew assembleDebug` (in `client/`) — BUILD SUCCESSFUL (output: `app-debug.apk`).
 
 ## Changed Files
 
 - `PROJECT_STATUS.md`
-- `server/src/VncServer.Core/Native/DesktopHelper.cs`
-- `server/src/VncServer.Core/Capture/ScreenCapture.cs`
-- `server/src/VncServer.Core/Security/IpRateLimiter.cs`
-- `server/src/VncServer.Core/Server/VncServerHost.cs`
-- `server/src/VncServer.Core/Server/VncSession.cs`
-- `tests/VncServer.Tests/RateLimiterTests.cs`
-- `client/app/src/main/java/com/thanhvnc/client/ui/MainActivity.kt`
+- `server/src/VncServer.Core/Protocol/VncMessages.cs`
+- `server/src/VncServer.Core/Protocol/VncProtocol.cs`
+- `tests/VncServer.Tests/ProtocolTests.cs`
+- `tests/VncServer.Tests/ServerIntegrationTests.cs`
+- `client/app/src/main/java/com/thanhvnc/client/protocol/VncMessages.kt`
+- `client/app/src/main/java/com/thanhvnc/client/protocol/VncProtocol.kt`
+- `client/app/src/test/java/com/thanhvnc/client/VncProtocolTest.kt`
 
 ## Next Action
 
-End-to-end user manual verification on physical Android device and Windows PC. Optional future roadmap: Opus audio streaming over decoupled channel.
+Deploy Windows Server on host PC and Android Client APK to physical mobile device for live interactive field testing.
 
 ## Resume Instructions
 

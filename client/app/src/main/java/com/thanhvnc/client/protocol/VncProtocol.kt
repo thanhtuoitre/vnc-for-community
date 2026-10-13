@@ -139,6 +139,30 @@ object VncProtocol {
         return ClipboardMessage(String(payload, Charsets.UTF_8))
     }
 
+    fun serializeAudioFrame(frame: AudioFrame): ByteArray {
+        val metaLen = 8
+        val buf = ByteBuffer.allocate(metaLen + frame.data.size).order(ByteOrder.LITTLE_ENDIAN)
+        buf.putInt((frame.timestampMs and 0xFFFFFFFFL).toInt())
+        buf.putShort(frame.sampleRate.toShort())
+        buf.put(frame.channels)
+        buf.put(frame.codec)
+        buf.put(frame.data)
+        return buf.array()
+    }
+
+    fun deserializeAudioFrame(payload: ByteArray): AudioFrame {
+        val metaLen = 8
+        require(payload.size >= metaLen) { "Audio frame payload too short" }
+        val buf = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
+        val timestampMs = buf.int.toLong() and 0xFFFFFFFFL
+        val sampleRate = buf.short.toInt() and 0xFFFF
+        val channels = buf.get()
+        val codec = buf.get()
+        val data = ByteArray(payload.size - metaLen)
+        buf.get(data)
+        return AudioFrame(timestampMs, sampleRate, channels, codec, data)
+    }
+
     fun readExactly(stream: InputStream, buffer: ByteArray, length: Int) {
         var offset = 0
         while (offset < length) {

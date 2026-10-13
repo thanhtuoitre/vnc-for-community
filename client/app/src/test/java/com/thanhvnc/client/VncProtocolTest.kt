@@ -165,4 +165,18 @@ class VncProtocolTest {
 
         assertEquals(testText, deserialized.text)
     }
+
+    @Test
+    fun testAudioFrameRoundtrip() {
+        val dummyPcm = byteArrayOf(0x01, 0x02, 0x03, 0x04, 0x05, 0x06)
+        val original = AudioFrame(998877L, 48000, 2.toByte(), 1.toByte(), dummyPcm)
+        val serialized = VncProtocol.serializeAudioFrame(original)
+        val deserialized = VncProtocol.deserializeAudioFrame(serialized)
+
+        assertEquals(original.timestampMs, deserialized.timestampMs)
+        assertEquals(original.sampleRate, deserialized.sampleRate)
+        assertEquals(original.channels, deserialized.channels)
+        assertEquals(original.codec, deserialized.codec)
+        assertArrayEquals(original.data, deserialized.data)
+    }
 }
