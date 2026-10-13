@@ -108,17 +108,28 @@ Build a working, low-latency Windows VNC Server and Android VNC Client.
   - Quick Direct Connect: Sleek card allowing instant connection to any IP without saving.
   - Visual Connection Flow: Modal progress indicator displaying granular stages (Connecting, Handshaking, Authenticating) with cancellation support.
   - Immersive Fullscreen VNC Viewer: Fullscreen canvas with transient system bar hiding via `WindowInsetsControllerCompat`.
-  - Floating Translucent Control Pill HUD: Unobtrusive overlay displaying real-time FPS/RTT, collapsible to a minimal pill, with quick action controls:
-    - ⌨️ Keyboard toggle
-    - 📋 Clipboard sync
-    - 🖱️ Mouse Mode toggle: Direct Touch vs Virtual Trackpad (with crisp on-screen arrow pointer)
-    - ⚙️ Quality menu: Fast (40%), Balanced (70%), High (90%)
-    - ❌ Disconnect confirmation dialog
-  - Test coverage: 42 server tests passing, 16 client tests passing, debug APK successfully assembled.
+  - Floating Translucent Control Pill HUD: Unobtrusive overlay displaying real-time FPS/RTT, collapsible to a minimal pill, with quick action controls.
+
+- **Milestone 9 — RealVNC-Grade Remote Input & Viewer Engine:**
+  - High-Precision Coordinate Mapping: Exact mathematical transformation mapping Android screen touch coordinates through letterboxed/pillarboxed viewport and dynamic zoom/pan offsets directly to Windows physical screen coordinates `(0..remoteWidth-1, 0..remoteHeight-1)`.
+  - Pinch-to-Zoom & Pan Viewport: Smooth focal-point pinch-to-zoom (1.0x to 5.0x) with `ScaleGestureDetector` and two-finger panning. Pinch gestures are strictly isolated from mouse events to prevent pointer jumps. Reset zoom action returns immediately to 100% fit-to-screen.
+  - Dual Mouse Modes & Gestures:
+    - Touch Mode: Direct manipulation with single tap (left click), double tap (double click), long press with haptic feedback (right click), two-finger tap (right click), two-finger vertical drag (mouse wheel +/-120 delta), single-finger move with coalescing.
+    - Trackpad Mode: Smooth relative pointer translation with acceleration factor, rendered on canvas as an on-screen cursor arrow, tap anywhere for left click, double-tap drag for window moving/text selection, long-press/two-finger tap for right click, two-finger scroll.
+  - Input Coalescing: Throttles mouse movement packets to ~60-80 Hz (16ms) to eliminate socket saturation while keeping sub-frame cursor tracking.
+  - Remote Keyboard & Android IME:
+    - Full Android IME support via custom `InputConnection` on `VncSurfaceView`: handles `commitText` with `KeyFlags.Unicode` (supports all Unicode characters, Vietnamese diacritics, symbols, punctuation), `deleteSurroundingText` (Backspace/Delete), and `sendKeyEvent`.
+    - Hardware Keyboard Mapping: Full mapping of A-Z, 0-9, F1-F12, navigation keys (Home, End, PgUp, PgDn, Insert, Delete, Arrows), Enter, Backspace, Tab, Esc.
+    - Compact Modifier Toolbar: Unobtrusive overlay with stateful toggle keys (`Ctrl`, `Alt`, `Shift`, `Win`, `Esc`, `Tab`) and `FN ▾` popup menu (`Win+D`, `Alt+Tab`, `Ctrl+Alt+Del`, F1-F12, Arrows, etc.).
+    - Collapsible HUD: Toolbar collapses into a discreet floating trigger button to preserve 100% remote desktop visibility.
+  - Windows Server Input Simulator:
+    - `SimulateMouse`: Positions mouse cursor simultaneously with click/wheel events (`MouseEventMove | MouseEventAbsolute | MouseEventVirtualDesk`) for pixel-exact click placement.
+    - `SimulateKeyboard`: Supports `KeyFlags.Unicode` via Win32 `KEYEVENTF_UNICODE` for universal character typing across Windows applications.
+  - Test coverage: 50 server tests passing, 17 client tests passing, debug APK successfully assembled and deployed to `dist/ThanhVNC.apk`.
 
 ## In Progress
 
-None. Milestones 1 through 8 are completely implemented, verified, tested, and checkpointed.
+None. Milestones 1 through 9 are completely implemented, verified, tested, and checkpointed.
 
 ## Known Problems
 
@@ -126,30 +137,27 @@ None.
 
 ## Tests
 
-- Windows Server Tests: `dotnet test server/VncServer.sln` — 42 passed, 0 failed, 0 skipped (~401 ms).
-- Android Client Tests: `gradlew test` (in `client/`) — 16 passed, 0 failed, 0 skipped (Debug + Release unit test passes).
+- Windows Server Tests: `dotnet test server/VncServer.sln` — 50 passed, 0 failed, 0 skipped (~409 ms).
+- Android Client Tests: `gradlew test` (in `client/`) — 17 passed, 0 failed, 0 skipped (Debug + Release unit test passes).
 - Android APK Assembly: `gradlew assembleDebug` (in `client/`) — BUILD SUCCESSFUL (output: `app-debug.apk`, updated in `dist/ThanhVNC.apk`).
 
 ## Changed Files
 
 - `PROJECT_STATUS.md`
-- `client/app/src/main/java/com/thanhvnc/client/model/ServerProfile.kt`
-- `client/app/src/main/java/com/thanhvnc/client/model/ServerProfileRepository.kt`
-- `client/app/src/main/java/com/thanhvnc/client/ui/ServerProfileAdapter.kt`
+- `server/src/VncServer.Core/Protocol/VncMessages.cs`
+- `server/src/VncServer.Core/Input/InputSimulator.cs`
+- `tests/VncServer.Tests/AdvancedInputTests.cs`
+- `client/app/src/main/java/com/thanhvnc/client/protocol/VncMessages.kt`
+- `client/app/src/test/java/com/thanhvnc/client/VncProtocolTest.kt`
 - `client/app/src/main/java/com/thanhvnc/client/ui/VncSurfaceView.kt`
 - `client/app/src/main/java/com/thanhvnc/client/ui/MainActivity.kt`
-- `client/app/src/main/res/drawable/bg_avatar_circle.xml`
-- `client/app/src/main/res/drawable/bg_control_pill.xml`
-- `client/app/src/main/res/layout/item_server_profile.xml`
-- `client/app/src/main/res/layout/dialog_edit_server.xml`
 - `client/app/src/main/res/layout/activity_main.xml`
-- `client/app/src/main/res/values/colors.xml`
-- `client/app/src/main/res/values/strings.xml`
-- `client/app/src/main/res/values/themes.xml`
+- `client/app/src/main/res/drawable/bg_modifier_btn.xml`
+- `client/app/src/main/res/drawable/bg_modifier_btn_active.xml`
 
 ## Next Action
 
-Deploy Windows Server on host PC and Android Client APK (`dist/ThanhVNC.apk`) to physical mobile device for live interactive field testing.
+Deploy Windows Server on host PC (`dist/run-server.bat`) and Android Client APK (`dist/ThanhVNC.apk`) to physical mobile device for live interactive field testing.
 
 ## Resume Instructions
 

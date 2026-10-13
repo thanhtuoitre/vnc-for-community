@@ -119,6 +119,19 @@ class VncProtocolTest {
     }
 
     @Test
+    fun testKeyboardInputUnicodeSerialization() {
+        val unicodeFlag = (KeyFlags.KEY_DOWN.toInt() or KeyFlags.UNICODE.toInt()).toShort()
+        val kb = KeyboardInput(unicodeFlag, 0.toShort(), 0x0111.toShort()) // 'đ'
+        val bytes = VncProtocol.serializeKeyboardInput(kb)
+        assertEquals(6, bytes.size)
+
+        val buf = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        assertEquals(unicodeFlag, buf.short)
+        assertEquals(0.toShort(), buf.short)
+        assertEquals(0x0111.toShort(), buf.short)
+    }
+
+    @Test
     fun testHmacAuthentication() {
         val challenge = byteArrayOf(10, 20, 30, 40)
         val password = "SecretVncPassword"

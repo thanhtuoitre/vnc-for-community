@@ -61,6 +61,8 @@ public sealed class InputSimulator
         public IntPtr dwExtraInfo;
     }
 
+    private const uint KeyEventUnicode = 0x0004;
+
     public static bool SimulateMouse(MouseInput input, int screenWidth, int screenHeight)
     {
         Native.DesktopHelper.AttachToInputDesktop();
@@ -68,7 +70,16 @@ public sealed class InputSimulator
         int normX = 0;
         int normY = 0;
 
-        if (input.Flags.HasFlag(MouseFlags.Move))
+        bool hasPosition = input.Flags.HasFlag(MouseFlags.Move) ||
+                           input.Flags.HasFlag(MouseFlags.LeftDown) ||
+                           input.Flags.HasFlag(MouseFlags.LeftUp) ||
+                           input.Flags.HasFlag(MouseFlags.RightDown) ||
+                           input.Flags.HasFlag(MouseFlags.RightUp) ||
+                           input.Flags.HasFlag(MouseFlags.MiddleDown) ||
+                           input.Flags.HasFlag(MouseFlags.MiddleUp) ||
+                           input.Flags.HasFlag(MouseFlags.Wheel);
+
+        if (hasPosition && input.X >= 0 && input.Y >= 0)
         {
             flags |= MouseEventMove | MouseEventAbsolute | MouseEventVirtualDesk;
             int maxW = Math.Max(1, screenWidth - 1);
@@ -114,6 +125,16 @@ public sealed class InputSimulator
         if (input.Flags.HasFlag(KeyFlags.KeyUp)) flags |= KeyEventKeyUp;
         if (input.Flags.HasFlag(KeyFlags.ExtendedKey)) flags |= KeyEventExtendedKey;
 
+        ushort wVk = input.VirtualKey;
+        ushort wScan = input.ScanCode;
+
+        if (input.Flags.HasFlag(KeyFlags.Unicode))
+        {
+            flags |= KeyEventUnicode;
+            wVk = 0;
+            wScan = input.ScanCode; // ScanCode carries the 16-bit UTF-16 code unit
+        }
+
         var nativeInput = new INPUT
         {
             type = InputKeyboard,
@@ -121,8 +142,8 @@ public sealed class InputSimulator
             {
                 ki = new KEYBDINPUT
                 {
-                    wVk = input.VirtualKey,
-                    wScan = input.ScanCode,
+                    wVk = wVk,
+                    wScan = wScan,
                     dwFlags = flags,
                     time = 0,
                     dwExtraInfo = IntPtr.Zero

@@ -37,6 +37,7 @@ object KeyFlags {
     const val KEY_DOWN: Short = (1 shl 0).toShort()
     const val KEY_UP: Short = (1 shl 1).toShort()
     const val EXTENDED_KEY: Short = (1 shl 2).toShort()
+    const val UNICODE: Short = (1 shl 3).toShort()
 }
 
 data class HandshakeRequest(val version: Byte, val clientName: String)

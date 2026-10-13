@@ -39,4 +39,35 @@ public class AdvancedInputTests
         bool upRes = InputSimulator.SimulateKeyboard(up);
         Assert.True(upRes);
     }
+
+    [Theory]
+    [InlineData('A')]
+    [InlineData('z')]
+    [InlineData('9')]
+    [InlineData('đ')]
+    [InlineData('ê')]
+    [InlineData('€')]
+    [InlineData('@')]
+    public void SimulateKeyboard_UnicodeCharacters_ExecuteCleanly(char c)
+    {
+        var down = new KeyboardInput(KeyFlags.KeyDown | KeyFlags.Unicode, 0, (ushort)c);
+        bool downRes = InputSimulator.SimulateKeyboard(down);
+        Assert.True(downRes);
+
+        var up = new KeyboardInput(KeyFlags.KeyUp | KeyFlags.Unicode, 0, (ushort)c);
+        bool upRes = InputSimulator.SimulateKeyboard(up);
+        Assert.True(upRes);
+    }
+
+    [Fact]
+    public void SimulateMouse_ClickWithCoordinate_ExecutesPositionedClick()
+    {
+        var click = new MouseInput(MouseFlags.LeftDown, 640, 480, 0);
+        bool res = InputSimulator.SimulateMouse(click, 1920, 1080);
+        Assert.True(res);
+
+        var release = new MouseInput(MouseFlags.LeftUp, 640, 480, 0);
+        bool resUp = InputSimulator.SimulateMouse(release, 1920, 1080);
+        Assert.True(resUp);
+    }
 }

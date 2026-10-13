@@ -38,7 +38,8 @@ public enum KeyFlags : ushort
     None = 0,
     KeyDown = 1 << 0,
     KeyUp = 1 << 1,
-    ExtendedKey = 1 << 2
+    ExtendedKey = 1 << 2,
+    Unicode = 1 << 3
 }
 
 public sealed record HandshakeRequest(byte Version, string ClientName);

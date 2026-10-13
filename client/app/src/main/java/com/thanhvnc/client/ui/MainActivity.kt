@@ -9,6 +9,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.PopupMenu
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
@@ -42,6 +43,12 @@ class MainActivity : AppCompatActivity() {
     private var frameCount = 0
     private var lastFpsTimestamp = System.currentTimeMillis()
     private var currentFps = 0f
+
+    // Modifier Key State
+    private var isCtrlActive = false
+    private var isAltActive = false
+    private var isShiftActive = false
+    private var isWinActive = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -117,6 +124,7 @@ class MainActivity : AppCompatActivity() {
 
         // Floating HUD actions
         binding.btnToggleKeyboard.setOnClickListener {
+            binding.vncSurfaceView.requestFocus()
             val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
             imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0)
         }
@@ -147,6 +155,11 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
+        binding.btnResetZoom.setOnClickListener {
+            binding.vncSurfaceView.resetView()
+            Toast.makeText(this, "Zoom reset (Fit to screen)", Toast.LENGTH_SHORT).show()
+        }
+
         binding.btnQualityMenu.setOnClickListener { view ->
             val popup = PopupMenu(this, view)
             popup.menu.add(0, 1, 0, "Fast (40% | 20 FPS)")
@@ -175,13 +188,171 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnCollapseHud.setOnClickListener {
-            val isVisible = binding.layoutHudActions.visibility == View.VISIBLE
-            binding.layoutHudActions.visibility = if (isVisible) View.GONE else View.VISIBLE
+            binding.overlayControlBar.visibility = View.GONE
+            binding.btnExpandHudTrigger.visibility = View.VISIBLE
+        }
+
+        binding.btnExpandHudTrigger.setOnClickListener {
+            binding.overlayControlBar.visibility = View.VISIBLE
+            binding.btnExpandHudTrigger.visibility = View.GONE
+        }
+
+        // Setup Modifier Keys
+        binding.btnKeyEsc.setOnClickListener {
+            sendVirtualKeyPress(0x1B) // VK_ESCAPE
+        }
+
+        binding.btnKeyTab.setOnClickListener {
+            sendVirtualKeyPress(0x09) // VK_TAB
+        }
+
+        binding.btnKeyCtrl.setOnClickListener {
+            isCtrlActive = !isCtrlActive
+            updateModifierButton(binding.btnKeyCtrl, isCtrlActive)
+            client.sendKeyboardInput(KeyboardInput(if (isCtrlActive) KeyFlags.KEY_DOWN else KeyFlags.KEY_UP, 0x11, 0))
+        }
+
+        binding.btnKeyAlt.setOnClickListener {
+            isAltActive = !isAltActive
+            updateModifierButton(binding.btnKeyAlt, isAltActive)
+            client.sendKeyboardInput(KeyboardInput(if (isAltActive) KeyFlags.KEY_DOWN else KeyFlags.KEY_UP, 0x12, 0))
+        }
+
+        binding.btnKeyShift.setOnClickListener {
+            isShiftActive = !isShiftActive
+            updateModifierButton(binding.btnKeyShift, isShiftActive)
+            client.sendKeyboardInput(KeyboardInput(if (isShiftActive) KeyFlags.KEY_DOWN else KeyFlags.KEY_UP, 0x10, 0))
+        }
+
+        binding.btnKeyWin.setOnClickListener {
+            isWinActive = !isWinActive
+            updateModifierButton(binding.btnKeyWin, isWinActive)
+            val flags = if (isWinActive) {
+                (KeyFlags.KEY_DOWN.toInt() or KeyFlags.EXTENDED_KEY.toInt()).toShort()
+            } else {
+                (KeyFlags.KEY_UP.toInt() or KeyFlags.EXTENDED_KEY.toInt()).toShort()
+            }
+            client.sendKeyboardInput(KeyboardInput(flags, 0x5B, 0)) // VK_LWIN
+        }
+
+        binding.btnKeyFn.setOnClickListener { view ->
+            showFnPopupMenu(view)
         }
 
         binding.vncSurfaceView.onMouseInput = { mouseInput ->
             client.sendMouseInput(mouseInput)
         }
+
+        binding.vncSurfaceView.onKeyboardInput = { kbInput ->
+            client.sendKeyboardInput(kbInput)
+        }
+    }
+
+    private fun sendVirtualKeyPress(vk: Short, isExtended: Boolean = false) {
+        var downFlags = KeyFlags.KEY_DOWN
+        var upFlags = KeyFlags.KEY_UP
+        if (isExtended) {
+            downFlags = (downFlags.toInt() or KeyFlags.EXTENDED_KEY.toInt()).toShort()
+            upFlags = (upFlags.toInt() or KeyFlags.EXTENDED_KEY.toInt()).toShort()
+        }
+        client.sendKeyboardInput(KeyboardInput(downFlags, vk, 0))
+        client.sendKeyboardInput(KeyboardInput(upFlags, vk, 0))
+    }
+
+    private fun updateModifierButton(view: TextView, active: Boolean) {
+        if (active) {
+            view.setBackgroundResource(R.drawable.bg_modifier_btn_active)
+            view.setTextColor(getColor(android.R.color.white))
+        } else {
+            view.setBackgroundResource(R.drawable.bg_modifier_btn)
+            view.setTextColor(getColor(R.color.text_primary))
+        }
+    }
+
+    private fun resetModifierKeys() {
+        if (isCtrlActive) {
+            client.sendKeyboardInput(KeyboardInput(KeyFlags.KEY_UP, 0x11, 0))
+            isCtrlActive = false
+            updateModifierButton(binding.btnKeyCtrl, false)
+        }
+        if (isAltActive) {
+            client.sendKeyboardInput(KeyboardInput(KeyFlags.KEY_UP, 0x12, 0))
+            isAltActive = false
+            updateModifierButton(binding.btnKeyAlt, false)
+        }
+        if (isShiftActive) {
+            client.sendKeyboardInput(KeyboardInput(KeyFlags.KEY_UP, 0x10, 0))
+            isShiftActive = false
+            updateModifierButton(binding.btnKeyShift, false)
+        }
+        if (isWinActive) {
+            client.sendKeyboardInput(KeyboardInput((KeyFlags.KEY_UP.toInt() or KeyFlags.EXTENDED_KEY.toInt()).toShort(), 0x5B, 0))
+            isWinActive = false
+            updateModifierButton(binding.btnKeyWin, false)
+        }
+    }
+
+    private fun showFnPopupMenu(anchor: View) {
+        val popup = PopupMenu(this, anchor)
+        popup.menu.add(0, 1, 0, "Win + D (Show Desktop)")
+        popup.menu.add(0, 2, 1, "Alt + Tab (Switch Window)")
+        popup.menu.add(0, 3, 2, "Ctrl + Alt + Del")
+        popup.menu.add(0, 4, 3, "Enter")
+        popup.menu.add(0, 5, 4, "Backspace")
+        popup.menu.add(0, 6, 5, "Delete")
+        popup.menu.add(0, 7, 6, "Arrow Up")
+        popup.menu.add(0, 8, 7, "Arrow Down")
+        popup.menu.add(0, 9, 8, "Arrow Left")
+        popup.menu.add(0, 10, 9, "Arrow Right")
+        popup.menu.add(0, 11, 10, "F1")
+        popup.menu.add(0, 12, 11, "F2")
+        popup.menu.add(0, 13, 12, "F4 (or Alt+F4)")
+        popup.menu.add(0, 14, 13, "F5 (Refresh)")
+        popup.menu.add(0, 15, 14, "F11 (Fullscreen)")
+        popup.menu.add(0, 16, 15, "F12 (DevTools)")
+
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                1 -> { // Win + D
+                    client.sendKeyboardInput(KeyboardInput(KeyFlags.KEY_DOWN, 0x5B, 0))
+                    client.sendKeyboardInput(KeyboardInput(KeyFlags.KEY_DOWN, 0x44, 0))
+                    client.sendKeyboardInput(KeyboardInput(KeyFlags.KEY_UP, 0x44, 0))
+                    client.sendKeyboardInput(KeyboardInput(KeyFlags.KEY_UP, 0x5B, 0))
+                    true
+                }
+                2 -> { // Alt + Tab
+                    client.sendKeyboardInput(KeyboardInput(KeyFlags.KEY_DOWN, 0x12, 0))
+                    client.sendKeyboardInput(KeyboardInput(KeyFlags.KEY_DOWN, 0x09, 0))
+                    client.sendKeyboardInput(KeyboardInput(KeyFlags.KEY_UP, 0x09, 0))
+                    client.sendKeyboardInput(KeyboardInput(KeyFlags.KEY_UP, 0x12, 0))
+                    true
+                }
+                3 -> { // Ctrl + Alt + Del
+                    client.sendKeyboardInput(KeyboardInput(KeyFlags.KEY_DOWN, 0x11, 0))
+                    client.sendKeyboardInput(KeyboardInput(KeyFlags.KEY_DOWN, 0x12, 0))
+                    client.sendKeyboardInput(KeyboardInput(KeyFlags.KEY_DOWN, 0x2E, 0))
+                    client.sendKeyboardInput(KeyboardInput(KeyFlags.KEY_UP, 0x2E, 0))
+                    client.sendKeyboardInput(KeyboardInput(KeyFlags.KEY_UP, 0x12, 0))
+                    client.sendKeyboardInput(KeyboardInput(KeyFlags.KEY_UP, 0x11, 0))
+                    true
+                }
+                4 -> { sendVirtualKeyPress(0x0D); true } // Enter
+                5 -> { sendVirtualKeyPress(0x08); true } // Backspace
+                6 -> { sendVirtualKeyPress(0x2E, isExtended = true); true } // Delete
+                7 -> { sendVirtualKeyPress(0x26, isExtended = true); true } // Up
+                8 -> { sendVirtualKeyPress(0x28, isExtended = true); true } // Down
+                9 -> { sendVirtualKeyPress(0x25, isExtended = true); true } // Left
+                10 -> { sendVirtualKeyPress(0x27, isExtended = true); true } // Right
+                11 -> { sendVirtualKeyPress(0x70); true } // F1
+                12 -> { sendVirtualKeyPress(0x71); true } // F2
+                13 -> { sendVirtualKeyPress(0x73); true } // F4
+                14 -> { sendVirtualKeyPress(0x74); true } // F5
+                15 -> { sendVirtualKeyPress(0x7A); true } // F11
+                16 -> { sendVirtualKeyPress(0x7B); true } // F12
+                else -> false
+            }
+        }
+        popup.show()
     }
 
     private fun connectToServer(host: String, port: Int, password: String) {
@@ -247,6 +418,7 @@ class MainActivity : AppCompatActivity() {
             client.state.collectLatest { state ->
                 when (state) {
                     is VncConnectionState.Disconnected -> {
+                        resetModifierKeys()
                         binding.layoutConnectingProgress.visibility = View.GONE
                         binding.layoutViewer.visibility = View.GONE
                         binding.layoutDashboard.visibility = View.VISIBLE
@@ -269,6 +441,8 @@ class MainActivity : AppCompatActivity() {
                         binding.layoutConnectingProgress.visibility = View.GONE
                         binding.layoutDashboard.visibility = View.GONE
                         binding.layoutViewer.visibility = View.VISIBLE
+                        binding.overlayControlBar.visibility = View.VISIBLE
+                        binding.btnExpandHudTrigger.visibility = View.GONE
                         setImmersiveFullscreen(true)
 
                         activeProfileId?.let { id ->
@@ -280,6 +454,7 @@ class MainActivity : AppCompatActivity() {
                         binding.textHudStats.text = "Reconnecting (${state.attempt})..."
                     }
                     is VncConnectionState.Error -> {
+                        resetModifierKeys()
                         binding.layoutConnectingProgress.visibility = View.GONE
                         Snackbar.make(binding.root, "Error: ${state.message}", Snackbar.LENGTH_LONG)
                             .setAction("Dismiss") {}
@@ -345,7 +520,14 @@ class MainActivity : AppCompatActivity() {
         if (client.state.value is VncConnectionState.Connected) {
             val vk = mapAndroidKeyToWindowsVk(keyCode)
             if (vk != 0.toShort()) {
-                client.sendKeyboardInput(KeyboardInput(KeyFlags.KEY_DOWN, vk, 0))
+                val isExtended = isExtendedVirtualKey(vk)
+                val flags = if (isExtended) (KeyFlags.KEY_DOWN.toInt() or KeyFlags.EXTENDED_KEY.toInt()).toShort() else KeyFlags.KEY_DOWN
+                client.sendKeyboardInput(KeyboardInput(flags, vk, 0))
+                return true
+            } else if (event != null && event.unicodeChar > 0) {
+                // Unicode character input
+                val flags = (KeyFlags.KEY_DOWN.toInt() or KeyFlags.UNICODE.toInt()).toShort()
+                client.sendKeyboardInput(KeyboardInput(flags, 0, event.unicodeChar.toShort()))
                 return true
             }
         }
@@ -356,11 +538,34 @@ class MainActivity : AppCompatActivity() {
         if (client.state.value is VncConnectionState.Connected) {
             val vk = mapAndroidKeyToWindowsVk(keyCode)
             if (vk != 0.toShort()) {
-                client.sendKeyboardInput(KeyboardInput(KeyFlags.KEY_UP, vk, 0))
+                val isExtended = isExtendedVirtualKey(vk)
+                val flags = if (isExtended) (KeyFlags.KEY_UP.toInt() or KeyFlags.EXTENDED_KEY.toInt()).toShort() else KeyFlags.KEY_UP
+                client.sendKeyboardInput(KeyboardInput(flags, vk, 0))
+                return true
+            } else if (event != null && event.unicodeChar > 0) {
+                val flags = (KeyFlags.KEY_UP.toInt() or KeyFlags.UNICODE.toInt()).toShort()
+                client.sendKeyboardInput(KeyboardInput(flags, 0, event.unicodeChar.toShort()))
                 return true
             }
         }
         return super.onKeyUp(keyCode, event)
+    }
+
+    private fun isExtendedVirtualKey(vk: Short): Boolean {
+        return when (vk) {
+            0x21.toShort(), // Page Up
+            0x22.toShort(), // Page Down
+            0x23.toShort(), // End
+            0x24.toShort(), // Home
+            0x25.toShort(), // Left
+            0x26.toShort(), // Up
+            0x27.toShort(), // Right
+            0x28.toShort(), // Down
+            0x2D.toShort(), // Insert
+            0x2E.toShort(), // Delete
+            0x5B.toShort() -> true // Win Key
+            else -> false
+        }
     }
 
     private fun mapAndroidKeyToWindowsVk(keyCode: Int): Short {
@@ -370,18 +575,41 @@ class MainActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_ENTER -> 0x0D // VK_RETURN
             KeyEvent.KEYCODE_ESCAPE -> 0x1B // VK_ESCAPE
             KeyEvent.KEYCODE_SPACE -> 0x20 // VK_SPACE
+            KeyEvent.KEYCODE_PAGE_UP -> 0x21 // VK_PRIOR
+            KeyEvent.KEYCODE_PAGE_DOWN -> 0x22 // VK_NEXT
+            KeyEvent.KEYCODE_MOVE_END -> 0x23 // VK_END
+            KeyEvent.KEYCODE_MOVE_HOME -> 0x24 // VK_HOME
             KeyEvent.KEYCODE_DPAD_LEFT -> 0x25 // VK_LEFT
             KeyEvent.KEYCODE_DPAD_UP -> 0x26 // VK_UP
             KeyEvent.KEYCODE_DPAD_RIGHT -> 0x27 // VK_RIGHT
             KeyEvent.KEYCODE_DPAD_DOWN -> 0x28 // VK_DOWN
-            in KeyEvent.KEYCODE_A..KeyEvent.KEYCODE_Z -> (0x41 + (keyCode - KeyEvent.KEYCODE_A)).toShort()
+            KeyEvent.KEYCODE_INSERT -> 0x2D // VK_INSERT
+            KeyEvent.KEYCODE_FORWARD_DEL -> 0x2E // VK_DELETE
             in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> (0x30 + (keyCode - KeyEvent.KEYCODE_0)).toShort()
+            in KeyEvent.KEYCODE_A..KeyEvent.KEYCODE_Z -> (0x41 + (keyCode - KeyEvent.KEYCODE_A)).toShort()
+            KeyEvent.KEYCODE_F1 -> 0x70
+            KeyEvent.KEYCODE_F2 -> 0x71
+            KeyEvent.KEYCODE_F3 -> 0x72
+            KeyEvent.KEYCODE_F4 -> 0x73
+            KeyEvent.KEYCODE_F5 -> 0x74
+            KeyEvent.KEYCODE_F6 -> 0x75
+            KeyEvent.KEYCODE_F7 -> 0x76
+            KeyEvent.KEYCODE_F8 -> 0x77
+            KeyEvent.KEYCODE_F9 -> 0x78
+            KeyEvent.KEYCODE_F10 -> 0x79
+            KeyEvent.KEYCODE_F11 -> 0x7A
+            KeyEvent.KEYCODE_F12 -> 0x7B
+            KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_CTRL_RIGHT -> 0x11
+            KeyEvent.KEYCODE_ALT_LEFT, KeyEvent.KEYCODE_ALT_RIGHT -> 0x12
+            KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_SHIFT_RIGHT -> 0x10
+            KeyEvent.KEYCODE_WINDOW -> 0x5B
             else -> 0
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        resetModifierKeys()
         client.disconnect()
     }
 }

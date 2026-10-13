@@ -295,97 +295,220 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="top|center_horizontal"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="12dp"
             android:background="@drawable/bg_control_pill"
             android:elevation="8dp"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="12dp"
-            android:paddingVertical="6dp">
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="5dp">
 
             <!-- Metrics Status Badge -->
             <TextView
                 android:id="@+id/textHudStats"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
-                android:paddingHorizontal="6dp"
+                android:layout_marginEnd="6dp"
+                android:paddingHorizontal="4dp"
                 android:text="30 FPS | 15 ms"
                 android:textColor="@color/success_light"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:textStyle="bold" />
 
             <!-- Expanded action buttons container -->
-            <LinearLayout
-                android:id="@+id/layoutHudActions"
+            <HorizontalScrollView
+                android:id="@+id/scrollHudActions"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:visibility="visible">
+                android:overScrollMode="never"
+                android:scrollbars="none">
 
-                <!-- Toggle Keyboard -->
-                <ImageButton
-                    android:id="@+id/btnToggleKeyboard"
-                    android:layout_width="38dp"
-                    android:layout_height="38dp"
-                    android:layout_marginHorizontal="2dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="Keyboard"
-                    android:src="@android:drawable/ic_input_get"
-                    app:tint="@color/text_primary" />
+                <LinearLayout
+                    android:id="@+id/layoutHudActions"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
 
-                <!-- Sync Clipboard -->
-                <ImageButton
-                    android:id="@+id/btnSyncClipboard"
-                    android:layout_width="38dp"
-                    android:layout_height="38dp"
-                    android:layout_marginHorizontal="2dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="Clipboard"
-                    android:src="@android:drawable/ic_menu_send"
-                    app:tint="@color/text_primary" />
+                    <!-- Modifier Key: ESC -->
+                    <TextView
+                        android:id="@+id/btnKeyEsc"
+                        android:layout_width="wrap_content"
+                        android:layout_height="28dp"
+                        android:layout_marginHorizontal="2dp"
+                        android:background="@drawable/bg_modifier_btn"
+                        android:gravity="center"
+                        android:paddingHorizontal="6dp"
+                        android:text="ESC"
+                        android:textColor="@color/text_primary"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
 
-                <!-- Toggle Mouse / Trackpad Mode -->
-                <ImageButton
-                    android:id="@+id/btnToggleMouseMode"
-                    android:layout_width="38dp"
-                    android:layout_height="38dp"
-                    android:layout_marginHorizontal="2dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="Mouse Mode"
-                    android:src="@android:drawable/ic_menu_compass"
-                    app:tint="@color/primary_accent" />
+                    <!-- Modifier Key: TAB -->
+                    <TextView
+                        android:id="@+id/btnKeyTab"
+                        android:layout_width="wrap_content"
+                        android:layout_height="28dp"
+                        android:layout_marginHorizontal="2dp"
+                        android:background="@drawable/bg_modifier_btn"
+                        android:gravity="center"
+                        android:paddingHorizontal="6dp"
+                        android:text="TAB"
+                        android:textColor="@color/text_primary"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
 
-                <!-- Quality Selection Menu -->
-                <ImageButton
-                    android:id="@+id/btnQualityMenu"
-                    android:layout_width="38dp"
-                    android:layout_height="38dp"
-                    android:layout_marginHorizontal="2dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="Quality"
-                    android:src="@android:drawable/ic_menu_preferences"
-                    app:tint="@color/text_primary" />
+                    <!-- Modifier Key: CTRL -->
+                    <TextView
+                        android:id="@+id/btnKeyCtrl"
+                        android:layout_width="wrap_content"
+                        android:layout_height="28dp"
+                        android:layout_marginHorizontal="2dp"
+                        android:background="@drawable/bg_modifier_btn"
+                        android:gravity="center"
+                        android:paddingHorizontal="7dp"
+                        android:text="CTRL"
+                        android:textColor="@color/text_primary"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
 
-                <!-- Disconnect Button -->
-                <ImageButton
-                    android:id="@+id/btnDisconnectSession"
-                    android:layout_width="38dp"
-                    android:layout_height="38dp"
-                    android:layout_marginStart="4dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="Disconnect"
-                    android:src="@android:drawable/ic_menu_close_clear_cancel"
-                    app:tint="@color/danger_color" />
+                    <!-- Modifier Key: ALT -->
+                    <TextView
+                        android:id="@+id/btnKeyAlt"
+                        android:layout_width="wrap_content"
+                        android:layout_height="28dp"
+                        android:layout_marginHorizontal="2dp"
+                        android:background="@drawable/bg_modifier_btn"
+                        android:gravity="center"
+                        android:paddingHorizontal="7dp"
+                        android:text="ALT"
+                        android:textColor="@color/text_primary"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
 
-            </LinearLayout>
+                    <!-- Modifier Key: SHIFT -->
+                    <TextView
+                        android:id="@+id/btnKeyShift"
+                        android:layout_width="wrap_content"
+                        android:layout_height="28dp"
+                        android:layout_marginHorizontal="2dp"
+                        android:background="@drawable/bg_modifier_btn"
+                        android:gravity="center"
+                        android:paddingHorizontal="6dp"
+                        android:text="SHIFT"
+                        android:textColor="@color/text_primary"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
 
-            <!-- Collapse / Expand HUD Toggle -->
+                    <!-- Modifier Key: WIN -->
+                    <TextView
+                        android:id="@+id/btnKeyWin"
+                        android:layout_width="wrap_content"
+                        android:layout_height="28dp"
+                        android:layout_marginHorizontal="2dp"
+                        android:background="@drawable/bg_modifier_btn"
+                        android:gravity="center"
+                        android:paddingHorizontal="6dp"
+                        android:text="WIN"
+                        android:textColor="@color/text_primary"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+
+                    <!-- Modifier Key: FN Popup -->
+                    <TextView
+                        android:id="@+id/btnKeyFn"
+                        android:layout_width="wrap_content"
+                        android:layout_height="28dp"
+                        android:layout_marginHorizontal="2dp"
+                        android:background="@drawable/bg_modifier_btn"
+                        android:gravity="center"
+                        android:paddingHorizontal="6dp"
+                        android:text="FN ▾"
+                        android:textColor="@color/primary_accent"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+
+                    <!-- Divider -->
+                    <View
+                        android:layout_width="1dp"
+                        android:layout_height="18dp"
+                        android:layout_marginHorizontal="4dp"
+                        android:background="@color/surface_border" />
+
+                    <!-- Toggle Keyboard -->
+                    <ImageButton
+                        android:id="@+id/btnToggleKeyboard"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:layout_marginHorizontal="1dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="Keyboard"
+                        android:src="@android:drawable/ic_input_get"
+                        app:tint="@color/text_primary" />
+
+                    <!-- Toggle Mouse / Trackpad Mode -->
+                    <ImageButton
+                        android:id="@+id/btnToggleMouseMode"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:layout_marginHorizontal="1dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="Mouse Mode"
+                        android:src="@android:drawable/ic_menu_compass"
+                        app:tint="@color/primary_accent" />
+
+                    <!-- Reset Zoom / Fit Screen -->
+                    <ImageButton
+                        android:id="@+id/btnResetZoom"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:layout_marginHorizontal="1dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="Fit Screen"
+                        android:src="@android:drawable/ic_menu_crop"
+                        app:tint="@color/text_primary" />
+
+                    <!-- Sync Clipboard -->
+                    <ImageButton
+                        android:id="@+id/btnSyncClipboard"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:layout_marginHorizontal="1dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="Clipboard"
+                        android:src="@android:drawable/ic_menu_send"
+                        app:tint="@color/text_primary" />
+
+                    <!-- Quality Selection Menu -->
+                    <ImageButton
+                        android:id="@+id/btnQualityMenu"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:layout_marginHorizontal="1dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="Quality"
+                        android:src="@android:drawable/ic_menu_preferences"
+                        app:tint="@color/text_primary" />
+
+                    <!-- Disconnect Button -->
+                    <ImageButton
+                        android:id="@+id/btnDisconnectSession"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:layout_marginStart="2dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="Disconnect"
+                        android:src="@android:drawable/ic_menu_close_clear_cancel"
+                        app:tint="@color/danger_color" />
+
+                </LinearLayout>
+            </HorizontalScrollView>
+
+            <!-- Collapse HUD Button -->
             <ImageButton
                 android:id="@+id/btnCollapseHud"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
                 android:layout_marginStart="2dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="Toggle HUD"
@@ -393,6 +516,21 @@
                 app:tint="@color/text_secondary" />
 
         </LinearLayout>
+
+        <!-- Floating Minimal Trigger Pill when HUD is collapsed -->
+        <ImageButton
+            android:id="@+id/btnExpandHudTrigger"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_gravity="top|end"
+            android:layout_margin="12dp"
+            android:alpha="0.8"
+            android:background="@drawable/bg_control_pill"
+            android:contentDescription="Show Toolbar"
+            android:elevation="8dp"
+            android:src="@android:drawable/ic_menu_manage"
+            android:visibility="gone"
+            app:tint="@color/primary_accent" />
 
     </FrameLayout>
 
