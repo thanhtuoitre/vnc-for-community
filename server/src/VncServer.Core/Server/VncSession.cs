@@ -1,0 +1,208 @@
+using System.Buffers.Binary;
+using System.Net.Sockets;
+using System.Threading.Channels;
+using VncServer.Core.Capture;
+using VncServer.Core.Input;
+using VncServer.Core.Protocol;
+
+namespace VncServer.Core.Server;
+
+public sealed class VncSession : IAsyncDisposable
+{
+    // ponytail: VncSession uses TCP with bounded channel drop-oldest; upgrade to QUIC/WebRTC when UDP NAT-traversal is needed.
+    private readonly TcpClient _client;
+    private readonly NetworkStream _stream;
+    private readonly ScreenCapture _capture;
+    private readonly string _password;
+    private readonly Action<string>? _log;
+    private readonly CancellationTokenSource _sessionCts = new();
+
+    public string RemoteEndPoint => _client.Client.RemoteEndPoint?.ToString() ?? "Unknown";
+
+    public VncSession(TcpClient client, ScreenCapture capture, string password, Action<string>? log = null)
+    {
+        _client = client;
+        _client.NoDelay = true;
+        _stream = client.GetStream();
+        _capture = capture;
+        _password = password;
+        _log = log;
+    }
+
+    public async Task RunAsync(CancellationToken cancellationToken = default)
+    {
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_sessionCts.Token, cancellationToken);
+        var ct = linkedCts.Token;
+
+        try
+        {
+            if (!await PerformHandshakeAndAuthAsync(ct).ConfigureAwait(false))
+            {
+                _log?.Invoke($"[{RemoteEndPoint}] Authentication failed. Connection terminated.");
+                return;
+            }
+
+            _log?.Invoke($"[{RemoteEndPoint}] Authenticated successfully. Starting stream and input loop.");
+
+            // Bounded channel with capacity 1 and DropOldest drops stale frames during network congestion
+            var frameChannel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(1)
+            {
+                FullMode = BoundedChannelFullMode.DropOldest,
+                SingleReader = true,
+                SingleWriter = true
+            });
+
+            var readTask = ProcessIncomingPacketsAsync(ct);
+            var captureTask = ProduceFramesAsync(frameChannel.Writer, ct);
+            var sendTask = ConsumeFramesAsync(frameChannel.Reader, ct);
+
+            await Task.WhenAny(readTask, captureTask, sendTask).ConfigureAwait(false);
+            _sessionCts.Cancel();
+            await Task.WhenAll(
+                readTask.ContinueWith(_ => { }, TaskScheduler.Default),
+                captureTask.ContinueWith(_ => { }, TaskScheduler.Default),
+                sendTask.ContinueWith(_ => { }, TaskScheduler.Default)
+            ).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected on disconnect
+        }
+        catch (Exception ex)
+        {
+            _log?.Invoke($"[{RemoteEndPoint}] Session error: {ex.Message}");
+        }
+    }
+
+    private async Task<bool> PerformHandshakeAndAuthAsync(CancellationToken ct)
+    {
+        // 1. Read HandshakeRequest
+        var (type, payload) = await ReadPacketAsync(ct).ConfigureAwait(false);
+        if (type != VncMessageType.HandshakeRequest) return false;
+
+        var handshakeReq = VncProtocol.DeserializeHandshakeRequest(payload);
+        _log?.Invoke($"[{RemoteEndPoint}] Handshake from '{handshakeReq.ClientName}' (v{handshakeReq.Version})");
+
+        // 2. Send HandshakeResponse
+        byte[] challenge = VncProtocol.GenerateChallenge();
+        _capture.RefreshResolution();
+        var handshakeRes = new HandshakeResponse(VncProtocol.CurrentVersion, challenge, _capture.Width, _capture.Height);
+        await SendPacketAsync(VncMessageType.HandshakeResponse, VncProtocol.SerializeHandshakeResponse(handshakeRes), ct).ConfigureAwait(false);
+
+        // 3. Read AuthRequest
+        var (authType, authPayload) = await ReadPacketAsync(ct).ConfigureAwait(false);
+        if (authType != VncMessageType.AuthRequest) return false;
+
+        var authReq = VncProtocol.DeserializeAuthRequest(authPayload);
+        bool isValid = VncProtocol.VerifyHmac(challenge, authReq.HmacSignature, _password);
+
+        // 4. Send AuthResponse
+        byte status = isValid ? (byte)0 : (byte)1;
+        await SendPacketAsync(VncMessageType.AuthResponse, VncProtocol.SerializeAuthResponse(new AuthResponse(status)), ct).ConfigureAwait(false);
+
+        return isValid;
+    }
+
+    private async Task ProcessIncomingPacketsAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            var (type, payload) = await ReadPacketAsync(ct).ConfigureAwait(false);
+            switch (type)
+            {
+                case VncMessageType.MouseInput:
+                    var mouse = VncProtocol.DeserializeMouseInput(payload);
+                    InputSimulator.SimulateMouse(mouse, _capture.Width, _capture.Height);
+                    break;
+
+                case VncMessageType.KeyboardInput:
+                    var kb = VncProtocol.DeserializeKeyboardInput(payload);
+                    InputSimulator.SimulateKeyboard(kb);
+                    break;
+
+                case VncMessageType.Heartbeat:
+                    var hb = VncProtocol.DeserializeHeartbeat(payload);
+                    await SendPacketAsync(VncMessageType.Heartbeat, VncProtocol.SerializeHeartbeat(hb), ct).ConfigureAwait(false);
+                    break;
+
+                case VncMessageType.Disconnect:
+                    _log?.Invoke($"[{RemoteEndPoint}] Client requested disconnect.");
+                    return;
+
+                default:
+                    _log?.Invoke($"[{RemoteEndPoint}] Unexpected message type: {type}");
+                    break;
+            }
+        }
+    }
+
+    private async Task ProduceFramesAsync(ChannelWriter<byte[]> writer, CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(33)); // Target ~30 FPS
+        bool forceFirstFrame = true;
+
+        while (!ct.IsCancellationRequested && await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+        {
+            byte[]? jpeg = _capture.CaptureJpeg(out uint frameIndex, force: forceFirstFrame);
+            forceFirstFrame = false;
+
+            if (jpeg == null) continue; // Unchanged screen content
+
+            long timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var frame = new ScreenFrame(frameIndex, timestamp, 0, 0, _capture.Width, _capture.Height, 1, jpeg);
+            byte[] framePayload = VncProtocol.SerializeScreenFrame(frame);
+
+            writer.TryWrite(framePayload);
+        }
+    }
+
+    private async Task ConsumeFramesAsync(ChannelReader<byte[]> reader, CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested && await reader.WaitToReadAsync(ct).ConfigureAwait(false))
+        {
+            while (reader.TryRead(out byte[]? framePayload))
+            {
+                await SendPacketAsync(VncMessageType.ScreenFrame, framePayload, ct).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private async Task<(VncMessageType Type, byte[] Payload)> ReadPacketAsync(CancellationToken ct)
+    {
+        byte[] headerBuffer = new byte[VncProtocol.HeaderSize];
+        await _stream.ReadExactlyAsync(headerBuffer, ct).ConfigureAwait(false);
+
+        if (!VncProtocol.TryReadHeader(headerBuffer, out var type, out int payloadLength))
+            throw new InvalidDataException("Invalid packet header received");
+
+        byte[] payload = new byte[payloadLength];
+        if (payloadLength > 0)
+        {
+            await _stream.ReadExactlyAsync(payload, ct).ConfigureAwait(false);
+        }
+
+        return (type, payload);
+    }
+
+    private async Task SendPacketAsync(VncMessageType type, byte[] payload, CancellationToken ct)
+    {
+        byte[] headerBuffer = new byte[VncProtocol.HeaderSize];
+        VncProtocol.WriteHeader(headerBuffer, type, payload.Length);
+
+        await _stream.WriteAsync(headerBuffer, ct).ConfigureAwait(false);
+        if (payload.Length > 0)
+        {
+            await _stream.WriteAsync(payload, ct).ConfigureAwait(false);
+        }
+        await _stream.FlushAsync(ct).ConfigureAwait(false);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _sessionCts.Cancel();
+        _sessionCts.Dispose();
+        _stream.Dispose();
+        _client.Dispose();
+        await Task.CompletedTask;
+    }
+}

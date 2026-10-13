@@ -1,0 +1,39 @@
+# Build outputs
+**/bin/
+**/obj/
+**/build/
+**/dist/
+**/out/
+
+# IDE and Editor files
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vscode/
+
+# Package managers and dependencies
+**/node_modules/
+.npm/
+
+# Gradle / Android
+.gradle/
+**/build/
+*.apk
+*.aar
+local.properties
+.cxx/
+
+# Logs and temp files
+*.log
+*.tmp
+*.temp
+scratch/
+artifacts/
+
+# OS files
+Thumbs.db
+[Dd]esktop.ini
+.DS_Store

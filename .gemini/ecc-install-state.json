@@ -1,0 +1,160 @@
+{
+  "schemaVersion": "ecc.install.v1",
+  "installedAt": "2026-10-13T13:00:17.465Z",
+  "target": {
+    "id": "gemini-project",
+    "target": "gemini",
+    "kind": "project",
+    "root": "C:\\Users\\Admin\\Desktop\\thanhvnc\\.gemini",
+    "installStatePath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\.gemini\\ecc-install-state.json"
+  },
+  "request": {
+    "profile": "minimal",
+    "modules": [],
+    "includeComponents": [],
+    "excludeComponents": [],
+    "legacyLanguages": [],
+    "legacyMode": false,
+    "hookConsent": null
+  },
+  "resolution": {
+    "selectedModules": [
+      "platform-configs",
+      "shared-script-utils"
+    ],
+    "skippedModules": [
+      "rules-core",
+      "agents-core",
+      "commands-core",
+      "workflow-quality"
+    ]
+  },
+  "source": {
+    "repoVersion": "2.2.3",
+    "repoCommit": "b92f181b3b748d1abbc2afd94af6aa7d8c8fca29",
+    "manifestVersion": 1
+  },
+  "operations": [
+    {
+      "kind": "copy-file",
+      "moduleId": "platform-configs",
+      "sourcePath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\ECC\\.gemini\\GEMINI.md",
+      "sourceRelativePath": ".gemini\\GEMINI.md",
+      "destinationPath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\.gemini\\GEMINI.md",
+      "strategy": "sync-root-children",
+      "ownership": "managed",
+      "scaffoldOnly": false,
+      "contentSha256": "b5bb089463845c2ac2eaf2af2d05590e6af2529f1c058a19d4e10acb0e4d80f7"
+    },
+    {
+      "kind": "copy-file",
+      "moduleId": "platform-configs",
+      "sourcePath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\ECC\\.pi\\README.md",
+      "sourceRelativePath": ".pi\\README.md",
+      "destinationPath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\.gemini\\.pi\\README.md",
+      "strategy": "preserve-relative-path",
+      "ownership": "managed",
+      "scaffoldOnly": false,
+      "contentSha256": "0196e47160da4cf4e697e13d0c405ff91c877aa18620075a6be931835a6f7d75"
+    },
+    {
+      "kind": "copy-file",
+      "moduleId": "platform-configs",
+      "sourcePath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\ECC\\.pi\\extensions\\hook-runtime.js",
+      "sourceRelativePath": ".pi\\extensions\\hook-runtime.js",
+      "destinationPath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\.gemini\\.pi\\extensions\\hook-runtime.js",
+      "strategy": "preserve-relative-path",
+      "ownership": "managed",
+      "scaffoldOnly": false,
+      "contentSha256": "8c16cfac1c852f8e8fc729829cc5f8fa241e78e1c4a8f80f4bffc32c229991fb"
+    },
+    {
+      "kind": "copy-file",
+      "moduleId": "platform-configs",
+      "sourcePath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\ECC\\.pi\\extensions\\index.ts",
+      "sourceRelativePath": ".pi\\extensions\\index.ts",
+      "destinationPath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\.gemini\\.pi\\extensions\\index.ts",
+      "strategy": "preserve-relative-path",
+      "ownership": "managed",
+      "scaffoldOnly": false,
+      "contentSha256": "7d6afa3c39c36b19c2890a5398ae2a7c673cd8e2c31a511852d0a9edec5b6bd8"
+    },
+    {
+      "kind": "copy-file",
+      "moduleId": "platform-configs",
+      "sourcePath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\ECC\\mcp-configs\\mcp-servers.json",
+      "sourceRelativePath": "mcp-configs\\mcp-servers.json",
+      "destinationPath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\.gemini\\mcp-configs\\mcp-servers.json",
+      "strategy": "preserve-relative-path",
+      "ownership": "managed",
+      "scaffoldOnly": false,
+      "contentSha256": "1424c0de0ee3efd13ebbb8e9724c26e6b7dc604b7edeff6616b2c71cb4c6bd46"
+    },
+    {
+      "kind": "copy-file",
+      "moduleId": "platform-configs",
+      "sourcePath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\ECC\\scripts\\auto-update.js",
+      "sourceRelativePath": "scripts/auto-update.js",
+      "destinationPath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\.gemini\\scripts\\auto-update.js",
+      "strategy": "preserve-relative-path",
+      "ownership": "managed",
+      "scaffoldOnly": false,
+      "contentSha256": "86f6b3a9254a59d68e51c7066a8939c08e26f70a551dba6394a06fe4ddbc64e7"
+    },
+    {
+      "kind": "copy-file",
+      "moduleId": "platform-configs",
+      "sourcePath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\ECC\\scripts\\setup-package-manager.js",
+      "sourceRelativePath": "scripts/setup-package-manager.js",
+      "destinationPath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\.gemini\\scripts\\setup-package-manager.js",
+      "strategy": "preserve-relative-path",
+      "ownership": "managed",
+      "scaffoldOnly": false,
+      "contentSha256": "499f38ef03b3f7f9896ad97229b8213df215544bb3c6bd6343e3889f023f6bda"
+    },
+    {
+      "kind": "copy-file",
+      "moduleId": "platform-configs",
+      "sourcePath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\ECC\\scripts\\lib\\package-manager.js",
+      "sourceRelativePath": "scripts/lib/package-manager.js",
+      "destinationPath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\.gemini\\scripts\\lib\\package-manager.js",
+      "strategy": "preserve-relative-path",
+      "ownership": "managed",
+      "scaffoldOnly": false,
+      "contentSha256": "636f8bc8379ae0c26be1f7c5b61555cf2a274698a4f9fbd34e9eced9eacb3662"
+    },
+    {
+      "kind": "copy-file",
+      "moduleId": "shared-script-utils",
+      "sourcePath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\ECC\\scripts\\lib\\utils.js",
+      "sourceRelativePath": "scripts/lib/utils.js",
+      "destinationPath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\.gemini\\scripts\\lib\\utils.js",
+      "strategy": "preserve-relative-path",
+      "ownership": "managed",
+      "scaffoldOnly": false,
+      "contentSha256": "c9a84bd7993cb65e532a16b1872ce468b869ec40aac2d743aa03bcbf6a6dd5a8"
+    },
+    {
+      "kind": "copy-file",
+      "moduleId": "shared-script-utils",
+      "sourcePath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\ECC\\scripts\\lib\\agent-data-home.js",
+      "sourceRelativePath": "scripts/lib/agent-data-home.js",
+      "destinationPath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\.gemini\\scripts\\lib\\agent-data-home.js",
+      "strategy": "preserve-relative-path",
+      "ownership": "managed",
+      "scaffoldOnly": false,
+      "contentSha256": "afc7d0ebe7b747345063f716c18816d6351e94cc1641303a4568fe70858e5710"
+    },
+    {
+      "kind": "copy-file",
+      "moduleId": "shared-script-utils",
+      "sourcePath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\ECC\\scripts\\lib\\path-safety.js",
+      "sourceRelativePath": "scripts/lib/path-safety.js",
+      "destinationPath": "C:\\Users\\Admin\\Desktop\\thanhvnc\\.gemini\\scripts\\lib\\path-safety.js",
+      "strategy": "preserve-relative-path",
+      "ownership": "managed",
+      "scaffoldOnly": false,
+      "contentSha256": "542126cf47247161dd26713a1f33d34af2881db46435ac8ecef76a8be31c062c"
+    }
+  ]
+}
