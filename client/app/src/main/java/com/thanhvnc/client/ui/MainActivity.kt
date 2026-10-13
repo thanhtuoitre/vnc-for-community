@@ -1,5 +1,7 @@
 package com.thanhvnc.client.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
 import android.view.KeyEvent
@@ -57,6 +59,22 @@ class MainActivity : AppCompatActivity() {
         binding.btnKeyboard.setOnClickListener {
             val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
             imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0)
+        }
+
+        binding.btnClipboard.setOnClickListener {
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clipData = clipboard.primaryClip
+            if (clipData != null && clipData.itemCount > 0) {
+                val text = clipData.getItemAt(0).text?.toString()
+                if (!text.isNullOrEmpty()) {
+                    client.sendClipboardText(text)
+                    Toast.makeText(this, "Sent to remote clipboard (${text.length} chars)", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "Android clipboard is empty", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                Toast.makeText(this, "Android clipboard is empty", Toast.LENGTH_SHORT).show()
+            }
         }
 
         binding.vncSurfaceView.onMouseInput = { mouseInput ->
@@ -117,6 +135,15 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             client.rttMs.collectLatest { rtt ->
                 updateStats(currentFps, rtt)
+            }
+        }
+
+        lifecycleScope.launch {
+            client.clipboardEvents.collect { text ->
+                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val clip = ClipData.newPlainText("ThanhVNC", text)
+                clipboard.setPrimaryClip(clip)
+                Toast.makeText(this@MainActivity, "Received clipboard text from host", Toast.LENGTH_SHORT).show()
             }
         }
     }

@@ -239,6 +239,18 @@ public static class VncProtocol
         return new QualityControl(payload[0], payload[1]);
     }
 
+    public static byte[] SerializeClipboard(ClipboardMessage msg)
+    {
+        return Encoding.UTF8.GetBytes(msg.Text);
+    }
+
+    public static ClipboardMessage DeserializeClipboard(ReadOnlySpan<byte> payload)
+    {
+        if (payload.Length > 1024 * 1024)
+            throw new FormatException("Clipboard payload exceeds 1 MB limit");
+        return new ClipboardMessage(Encoding.UTF8.GetString(payload));
+    }
+
     public static byte[] GenerateChallenge(int length = 32)
     {
         byte[] challenge = new byte[length];

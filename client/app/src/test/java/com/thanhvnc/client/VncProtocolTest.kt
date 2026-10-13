@@ -155,4 +155,14 @@ class VncProtocolTest {
         val rtt = receiveTime - deserialized.timestampMs
         assertEquals(42L, rtt)
     }
+
+    @Test
+    fun testClipboardRoundtrip() {
+        val testText = "Hello from Android VNC client! 📱 -> 💻"
+        val msg = ClipboardMessage(testText)
+        val serialized = VncProtocol.serializeClipboard(msg)
+        val deserialized = VncProtocol.deserializeClipboard(serialized)
+
+        assertEquals(testText, deserialized.text)
+    }
 }

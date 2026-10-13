@@ -82,9 +82,15 @@ Build a working, low-latency Windows VNC Server and Android VNC Client.
   - Heartbeat packet serialization and deserialization unit tests in `VncProtocolTest.kt`.
   - Comprehensive WAN & Remote Deployment Guide created in `docs/WAN_DEPLOYMENT.md` covering LAN firewall rules, router port-forwarding, Tailscale/WireGuard zero-config mesh VPNs, and STUN/TURN relay roadmap.
 
+- **Milestone 5 — Remote Clipboard Synchronization:**
+  - Contract-first wire protocol message `ClipboardText` (Type 11), UTF-8 payload with 1 MB bounds check.
+  - Windows Server: Native Win32 clipboard manager (`WindowsClipboard.cs`) handling `OpenClipboard`, `EmptyClipboard`, `GlobalAlloc`, `SetClipboardData(CF_UNICODETEXT)`, and `GetText()`.
+  - Android Client: Bidirectional clipboard synchronization (`sendClipboardText` and `clipboardEvents` flow) integrated with system `ClipboardManager` and UI quick sync button.
+  - Full test coverage: C# roundtrip unit test, Kotlin roundtrip unit test, and APK assemble validation.
+
 ## In Progress
 
-None. All four planned milestones (Server Engine, Android Client, Adaptive Resilience, Telemetry & WAN) are fully implemented, verified, and passing tests.
+None. Core engine, client application, resilience/adaptive quality, telemetry/WAN deployment, and remote clipboard synchronization are all fully implemented and verified.
 
 ## Known Problems
 
@@ -92,22 +98,28 @@ None.
 
 ## Tests
 
-- Windows Server Tests: `dotnet test server/VncServer.sln` — 35 passed, 0 failed, 0 skipped (~267 ms).
-- Android Client Tests: `gradlew test` (in `client/`) — 14 passed, 0 failed, 0 skipped (Debug + Release unit test passes).
+- Windows Server Tests: `dotnet test server/VncServer.sln` — 36 passed, 0 failed, 0 skipped (~332 ms).
+- Android Client Tests: `gradlew test` (in `client/`) — 15 passed, 0 failed, 0 skipped (Debug + Release unit test passes).
 - Android APK Assembly: `gradlew assembleDebug` (in `client/`) — BUILD SUCCESSFUL (output: `app-debug.apk`).
 
 ## Changed Files
 
 - `PROJECT_STATUS.md`
-- `docs/WAN_DEPLOYMENT.md`
+- `server/src/VncServer.Core/Protocol/VncMessages.cs`
+- `server/src/VncServer.Core/Protocol/VncProtocol.cs`
+- `server/src/VncServer.Core/Input/WindowsClipboard.cs`
+- `server/src/VncServer.Core/Server/VncSession.cs`
+- `tests/VncServer.Tests/ProtocolTests.cs`
+- `client/app/src/main/java/com/thanhvnc/client/protocol/VncMessages.kt`
 - `client/app/src/main/java/com/thanhvnc/client/protocol/VncProtocol.kt`
 - `client/app/src/main/java/com/thanhvnc/client/network/VncClient.kt`
 - `client/app/src/main/java/com/thanhvnc/client/ui/MainActivity.kt`
+- `client/app/src/main/res/layout/activity_main.xml`
 - `client/app/src/test/java/com/thanhvnc/client/VncProtocolTest.kt`
 
 ## Next Action
 
-End-to-end manual verification on physical Android device connected to Windows host across Wi-Fi or Tailscale network. Optional future enhancements: remote clipboard sharing or Opus audio streaming.
+End-to-end integration and user testing on physical hardware. Optional future extension: audio streaming support via Opus codec.
 
 ## Resume Instructions
 

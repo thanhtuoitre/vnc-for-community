@@ -35,6 +35,9 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
     private val _rttMs = MutableStateFlow(0L)
     val rttMs: StateFlow<Long> = _rttMs.asStateFlow()
 
+    private val _clipboardEvents = MutableSharedFlow<String>(extraBufferCapacity = 5)
+    val clipboardEvents: SharedFlow<String> = _clipboardEvents.asSharedFlow()
+
     private var currentQuality: Byte = 70
     private var currentFps: Byte = 30
 
@@ -164,6 +167,10 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
                             }
                         }
                     }
+                    VncMessageType.ClipboardText -> {
+                        val clip = VncProtocol.deserializeClipboard(payload)
+                        _clipboardEvents.tryEmit(clip.text)
+                    }
                     VncMessageType.Disconnect -> {
                         break
                     }
@@ -182,6 +189,11 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
 
     fun sendKeyboardInput(input: KeyboardInput) {
         outgoingPackets.trySend(Pair(VncMessageType.KeyboardInput, VncProtocol.serializeKeyboardInput(input)))
+    }
+
+    fun sendClipboardText(text: String) {
+        val clip = ClipboardMessage(text)
+        outgoingPackets.trySend(Pair(VncMessageType.ClipboardText, VncProtocol.serializeClipboard(clip)))
     }
 
     fun setQuality(quality: Byte, targetFps: Byte) {

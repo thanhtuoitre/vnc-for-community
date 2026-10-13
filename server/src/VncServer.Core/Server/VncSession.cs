@@ -132,6 +132,12 @@ public sealed class VncSession : IAsyncDisposable
                     _log?.Invoke($"[{RemoteEndPoint}] Adaptive Quality: {qc.Quality}%, FPS: {_targetFps}");
                     break;
 
+                case VncMessageType.ClipboardText:
+                    var clip = VncProtocol.DeserializeClipboard(payload);
+                    WindowsClipboard.SetText(clip.Text);
+                    _log?.Invoke($"[{RemoteEndPoint}] Remote clipboard updated ({clip.Text.Length} chars).");
+                    break;
+
                 case VncMessageType.Disconnect:
                     _log?.Invoke($"[{RemoteEndPoint}] Client requested disconnect.");
                     return;
@@ -206,6 +212,13 @@ public sealed class VncSession : IAsyncDisposable
             await _stream.WriteAsync(payload, ct).ConfigureAwait(false);
         }
         await _stream.FlushAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task SendClipboardTextAsync(string text, CancellationToken ct = default)
+    {
+        var msg = new ClipboardMessage(text);
+        byte[] payload = VncProtocol.SerializeClipboard(msg);
+        await SendPacketAsync(VncMessageType.ClipboardText, payload, ct).ConfigureAwait(false);
     }
 
     public async ValueTask DisposeAsync()

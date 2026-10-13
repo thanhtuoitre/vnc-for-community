@@ -169,4 +169,15 @@ public class ProtocolTests
         Assert.True(VncProtocol.VerifyHmac(challenge, validSignature, correctPassword));
         Assert.False(VncProtocol.VerifyHmac(challenge, validSignature, wrongPassword));
     }
+
+    [Fact]
+    public void Clipboard_Roundtrip_Succeeds()
+    {
+        const string text = "Hello from Android to Windows remote clipboard! 🚀";
+        var original = new ClipboardMessage(text);
+        byte[] serialized = VncProtocol.SerializeClipboard(original);
+        var deserialized = VncProtocol.DeserializeClipboard(serialized);
+
+        Assert.Equal(text, deserialized.Text);
+    }
 }

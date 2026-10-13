@@ -132,6 +132,13 @@ object VncProtocol {
         return QualityControl(payload[0], payload[1])
     }
 
+    fun serializeClipboard(msg: ClipboardMessage): ByteArray = msg.text.toByteArray(Charsets.UTF_8)
+
+    fun deserializeClipboard(payload: ByteArray): ClipboardMessage {
+        require(payload.size <= 1024 * 1024) { "Clipboard payload exceeds 1 MB limit" }
+        return ClipboardMessage(String(payload, Charsets.UTF_8))
+    }
+
     fun readExactly(stream: InputStream, buffer: ByteArray, length: Int) {
         var offset = 0
         while (offset < length) {

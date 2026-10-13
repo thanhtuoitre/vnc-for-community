@@ -13,7 +13,8 @@ public enum VncMessageType : byte
     KeyboardInput = 7,
     Heartbeat = 8,
     Disconnect = 9,
-    QualityControl = 10
+    QualityControl = 10,
+    ClipboardText = 11
 }
 
 [Flags]
@@ -66,3 +67,5 @@ public sealed record Heartbeat(long TimestampMs);
 public sealed record DisconnectMessage(byte ReasonCode);
 
 public sealed record QualityControl(byte Quality, byte TargetFps);
+
+public sealed record ClipboardMessage(string Text);
