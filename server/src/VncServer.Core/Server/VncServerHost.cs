@@ -11,6 +11,7 @@ public sealed class VncServerHost : IAsyncDisposable
     private readonly ScreenCapture _capture;
     private readonly string _password;
     private readonly Action<string>? _log;
+    private readonly Security.IpRateLimiter _rateLimiter = new();
     private readonly ConcurrentDictionary<VncSession, byte> _sessions = new();
     private readonly CancellationTokenSource _cts = new();
     private Task? _acceptTask;
@@ -43,7 +44,18 @@ public sealed class VncServerHost : IAsyncDisposable
             try
             {
                 var tcpClient = await _listener.AcceptTcpClientAsync(ct).ConfigureAwait(false);
-                var session = new VncSession(tcpClient, _capture, _password, _log);
+                if (tcpClient.Client.RemoteEndPoint is IPEndPoint ep)
+                {
+                    if (!_rateLimiter.IsConnectionAllowed(ep.Address))
+                    {
+                        _log?.Invoke($"Connection rejected from {ep.Address} (throttled / rate limited).");
+                        tcpClient.Dispose();
+                        continue;
+                    }
+                    _rateLimiter.RecordConnection(ep.Address);
+                }
+
+                var session = new VncSession(tcpClient, _capture, _password, _log, _rateLimiter);
                 _sessions.TryAdd(session, 0);
 
                 _log?.Invoke($"Accepted connection from {session.RemoteEndPoint}");

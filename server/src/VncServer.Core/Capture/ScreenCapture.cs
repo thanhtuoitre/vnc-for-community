@@ -9,6 +9,11 @@ public sealed class ScreenCapture : IDisposable
     // ponytail: ScreenCapture uses GDI CopyFromScreen + GDI+ JPEG; upgrade to DXGI Desktop Duplication + NVENC when 120fps/multi-monitor HDR is required.
     private const int SmCxScreen = 0;
     private const int SmCyScreen = 1;
+    private const int SmXVirtualScreen = 76;
+    private const int SmYVirtualScreen = 77;
+    private const int SmCxVirtualScreen = 78;
+    private const int SmCyVirtualScreen = 79;
+    private const int SmCMonitors = 80;
 
     [DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int nIndex);
@@ -21,12 +26,15 @@ public sealed class ScreenCapture : IDisposable
     private long _lastFrameHash = -1;
     private uint _frameIndex = 0;
 
+    public int VirtualX { get; private set; }
+    public int VirtualY { get; private set; }
     public int Width { get; private set; }
     public int Height { get; private set; }
     public int Quality { get; private set; }
 
     public ScreenCapture(int quality = 70)
     {
+        Native.DesktopHelper.EnableDpiAwareness();
         Quality = Math.Clamp(quality, 10, 100);
         _jpegCodec = GetJpegCodec() ?? throw new InvalidOperationException("JPEG encoder not found in system");
 
@@ -47,14 +55,24 @@ public sealed class ScreenCapture : IDisposable
 
     public void RefreshResolution()
     {
-        int w = GetSystemMetrics(SmCxScreen);
-        int h = GetSystemMetrics(SmCyScreen);
+        int monitors = GetSystemMetrics(SmCMonitors);
+        if (monitors > 1)
+        {
+            VirtualX = GetSystemMetrics(SmXVirtualScreen);
+            VirtualY = GetSystemMetrics(SmYVirtualScreen);
+            Width = GetSystemMetrics(SmCxVirtualScreen);
+            Height = GetSystemMetrics(SmCyVirtualScreen);
+        }
+        else
+        {
+            VirtualX = 0;
+            VirtualY = 0;
+            Width = GetSystemMetrics(SmCxScreen);
+            Height = GetSystemMetrics(SmCyScreen);
+        }
 
-        if (w <= 0) w = 1920;
-        if (h <= 0) h = 1080;
-
-        Width = w;
-        Height = h;
+        if (Width <= 0) Width = 1920;
+        if (Height <= 0) Height = 1080;
     }
 
     public byte[]? CaptureJpeg(out uint frameIndex, bool force = false)
@@ -69,7 +87,7 @@ public sealed class ScreenCapture : IDisposable
             using var bmp = new Bitmap(w, h, PixelFormat.Format32bppRgb);
             using (var g = Graphics.FromImage(bmp))
             {
-                g.CopyFromScreen(0, 0, 0, 0, new Size(w, h), CopyPixelOperation.SourceCopy);
+                g.CopyFromScreen(VirtualX, VirtualY, 0, 0, new Size(w, h), CopyPixelOperation.SourceCopy);
             }
 
             long currentHash = ComputeFastSampleHash(bmp);

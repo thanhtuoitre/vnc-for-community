@@ -88,9 +88,16 @@ Build a working, low-latency Windows VNC Server and Android VNC Client.
   - Android Client: Bidirectional clipboard synchronization (`sendClipboardText` and `clipboardEvents` flow) integrated with system `ClipboardManager` and UI quick sync button.
   - Full test coverage: C# roundtrip unit test, Kotlin roundtrip unit test, and APK assemble validation.
 
+- **Milestone 6 — Multi-Monitor Virtual Desktop, Per-Monitor DPI Scaling & Security Rate-Limiting:**
+  - High-DPI support: Win32 Per-Monitor DPI Awareness V2 enabled in `DesktopHelper.cs` to eliminate blur and capture native physical pixels on High-DPI displays.
+  - Multi-Monitor virtual screen: `ScreenCapture.cs` dynamically adapts to multi-monitor topologies (`SM_CMONITORS`, `SM_XVIRTUALSCREEN`, `SM_CXVIRTUALSCREEN`), delivering seamless multi-display frame capture and virtual desktop mouse mapping.
+  - Brute-force & DoS Defense: `IpRateLimiter.cs` enforces sliding-window connection rate limits and temporary IP blocks upon repeated failed HMAC authentication attempts.
+  - Connection Settings Persistence: `MainActivity.kt` persists host, port, and password to Android `SharedPreferences` to restore connection profiles across app sessions.
+  - Full test verification: 40 server tests passed (including rate-limiter tests), 15 client tests passed, debug APK successfully assembled.
+
 ## In Progress
 
-None. Core engine, client application, resilience/adaptive quality, telemetry/WAN deployment, and remote clipboard synchronization are all fully implemented and verified.
+None. Milestones 1 through 6 are fully implemented, verified, tested, and checkpointed.
 
 ## Known Problems
 
@@ -98,28 +105,24 @@ None.
 
 ## Tests
 
-- Windows Server Tests: `dotnet test server/VncServer.sln` — 36 passed, 0 failed, 0 skipped (~332 ms).
+- Windows Server Tests: `dotnet test server/VncServer.sln` — 40 passed, 0 failed, 0 skipped (~360 ms).
 - Android Client Tests: `gradlew test` (in `client/`) — 15 passed, 0 failed, 0 skipped (Debug + Release unit test passes).
 - Android APK Assembly: `gradlew assembleDebug` (in `client/`) — BUILD SUCCESSFUL (output: `app-debug.apk`).
 
 ## Changed Files
 
 - `PROJECT_STATUS.md`
-- `server/src/VncServer.Core/Protocol/VncMessages.cs`
-- `server/src/VncServer.Core/Protocol/VncProtocol.cs`
-- `server/src/VncServer.Core/Input/WindowsClipboard.cs`
+- `server/src/VncServer.Core/Native/DesktopHelper.cs`
+- `server/src/VncServer.Core/Capture/ScreenCapture.cs`
+- `server/src/VncServer.Core/Security/IpRateLimiter.cs`
+- `server/src/VncServer.Core/Server/VncServerHost.cs`
 - `server/src/VncServer.Core/Server/VncSession.cs`
-- `tests/VncServer.Tests/ProtocolTests.cs`
-- `client/app/src/main/java/com/thanhvnc/client/protocol/VncMessages.kt`
-- `client/app/src/main/java/com/thanhvnc/client/protocol/VncProtocol.kt`
-- `client/app/src/main/java/com/thanhvnc/client/network/VncClient.kt`
+- `tests/VncServer.Tests/RateLimiterTests.cs`
 - `client/app/src/main/java/com/thanhvnc/client/ui/MainActivity.kt`
-- `client/app/src/main/res/layout/activity_main.xml`
-- `client/app/src/test/java/com/thanhvnc/client/VncProtocolTest.kt`
 
 ## Next Action
 
-End-to-end integration and user testing on physical hardware. Optional future extension: audio streaming support via Opus codec.
+End-to-end user manual verification on physical Android device and Windows PC. Optional future roadmap: Opus audio streaming over decoupled channel.
 
 ## Resume Instructions
 

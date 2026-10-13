@@ -32,8 +32,35 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        loadSavedPreferences()
         setupListeners()
         observeClient()
+    }
+
+    private fun loadSavedPreferences() {
+        val prefs = getSharedPreferences("thanhvnc_prefs", Context.MODE_PRIVATE)
+        val host = prefs.getString("last_host", null)
+        val port = prefs.getInt("last_port", 5901)
+        val pass = prefs.getString("last_password", null)
+
+        if (!host.isNullOrEmpty()) {
+            binding.inputHost.setText(host)
+        }
+        if (port > 0) {
+            binding.inputPort.setText(port.toString())
+        }
+        if (!pass.isNullOrEmpty()) {
+            binding.inputPassword.setText(pass)
+        }
+    }
+
+    private fun savePreferences(host: String, port: Int, pass: String) {
+        val prefs = getSharedPreferences("thanhvnc_prefs", Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString("last_host", host)
+            .putInt("last_port", port)
+            .putString("last_password", pass)
+            .apply()
     }
 
     private fun setupListeners() {
@@ -52,6 +79,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 val port = portStr.toIntOrNull() ?: 5901
+                savePreferences(host, port, password)
                 client.connect(host, port, password)
             }
         }

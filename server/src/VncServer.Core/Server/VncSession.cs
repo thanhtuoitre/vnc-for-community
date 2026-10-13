@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Net;
 using System.Net.Sockets;
 using System.Threading.Channels;
 using VncServer.Core.Capture;
@@ -15,11 +16,17 @@ public sealed class VncSession : IAsyncDisposable
     private readonly ScreenCapture _capture;
     private readonly string _password;
     private readonly Action<string>? _log;
+    private readonly Security.IpRateLimiter? _rateLimiter;
     private readonly CancellationTokenSource _sessionCts = new();
 
     public string RemoteEndPoint => _client.Client.RemoteEndPoint?.ToString() ?? "Unknown";
 
-    public VncSession(TcpClient client, ScreenCapture capture, string password, Action<string>? log = null)
+    public VncSession(
+        TcpClient client,
+        ScreenCapture capture,
+        string password,
+        Action<string>? log = null,
+        Security.IpRateLimiter? rateLimiter = null)
     {
         _client = client;
         _client.NoDelay = true;
@@ -27,6 +34,7 @@ public sealed class VncSession : IAsyncDisposable
         _capture = capture;
         _password = password;
         _log = log;
+        _rateLimiter = rateLimiter;
     }
 
     public async Task RunAsync(CancellationToken cancellationToken = default)
@@ -96,6 +104,14 @@ public sealed class VncSession : IAsyncDisposable
         var authReq = VncProtocol.DeserializeAuthRequest(authPayload);
         bool isValid = VncProtocol.VerifyHmac(challenge, authReq.HmacSignature, _password);
 
+        if (_client.Client.RemoteEndPoint is IPEndPoint ep)
+        {
+            if (isValid)
+                _rateLimiter?.RecordAuthSuccess(ep.Address);
+            else
+                _rateLimiter?.RecordAuthFailure(ep.Address);
+        }
+
         // 4. Send AuthResponse
         byte status = isValid ? (byte)0 : (byte)1;
         await SendPacketAsync(VncMessageType.AuthResponse, VncProtocol.SerializeAuthResponse(new AuthResponse(status)), ct).ConfigureAwait(false);
@@ -163,7 +179,7 @@ public sealed class VncSession : IAsyncDisposable
             if (jpeg != null)
             {
                 long timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                var frame = new ScreenFrame(frameIndex, timestamp, 0, 0, _capture.Width, _capture.Height, 1, jpeg);
+                var frame = new ScreenFrame(frameIndex, timestamp, _capture.VirtualX, _capture.VirtualY, _capture.Width, _capture.Height, 1, jpeg);
                 byte[] framePayload = VncProtocol.SerializeScreenFrame(frame);
                 writer.TryWrite(framePayload);
             }

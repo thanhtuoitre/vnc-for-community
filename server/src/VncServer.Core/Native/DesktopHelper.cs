@@ -16,6 +16,28 @@ public static class DesktopHelper
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool CloseDesktop(IntPtr hDesktop);
 
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetProcessDpiAwarenessContext(IntPtr dpiContext);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetProcessDPIAware();
+
+    public static void EnableDpiAwareness()
+    {
+        try
+        {
+            // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
+            if (!SetProcessDpiAwarenessContext(new IntPtr(-4)))
+            {
+                SetProcessDPIAware();
+            }
+        }
+        catch
+        {
+            try { SetProcessDPIAware(); } catch { }
+        }
+    }
+
     public static void AttachToInputDesktop()
     {
         IntPtr desk = OpenInputDesktop(0, false, DesktopAll);
