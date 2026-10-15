@@ -19,6 +19,7 @@ using Xunit.Abstractions;
 
 namespace VncServer.Tests;
 
+[Collection("HardwareCapture")]
 public class QaMeasurementTests
 {
     private readonly ITestOutputHelper _output;

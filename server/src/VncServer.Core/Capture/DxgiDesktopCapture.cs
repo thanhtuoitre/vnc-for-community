@@ -172,7 +172,13 @@ public sealed unsafe class DxgiDesktopCapture : IDisposable
                                     {
                                         IntPtr* vtblOutput1 = *(IntPtr**)output1;
                                         var duplicateOutput = (delegate* unmanaged[Stdcall]<IntPtr, IntPtr, out IntPtr, int>)vtblOutput1[22];
-                                        hr = duplicateOutput(output1, _d3dDevice, out _outputDuplication);
+
+                                        for (int retry = 0; retry < 3; retry++)
+                                        {
+                                            hr = duplicateOutput(output1, _d3dDevice, out _outputDuplication);
+                                            if (hr == S_OK && _outputDuplication != IntPtr.Zero) break;
+                                            Thread.Sleep(50);
+                                        }
 
                                         if (hr == S_OK && _outputDuplication != IntPtr.Zero)
                                         {
@@ -250,7 +256,13 @@ public sealed unsafe class DxgiDesktopCapture : IDisposable
 
             IntPtr* vtblOut1 = *(IntPtr**)dxgiOutput1;
             var duplOut = (delegate* unmanaged[Stdcall]<IntPtr, IntPtr, out IntPtr, int>)vtblOut1[22];
-            hr = duplOut(dxgiOutput1, _d3dDevice, out _outputDuplication);
+
+            for (int retry = 0; retry < 3; retry++)
+            {
+                hr = duplOut(dxgiOutput1, _d3dDevice, out _outputDuplication);
+                if (hr == S_OK && _outputDuplication != IntPtr.Zero) break;
+                Thread.Sleep(50);
+            }
 
             if (hr == S_OK && _outputDuplication != IntPtr.Zero)
             {

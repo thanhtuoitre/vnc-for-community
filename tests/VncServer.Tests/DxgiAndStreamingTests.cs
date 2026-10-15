@@ -4,6 +4,7 @@ using Xunit;
 
 namespace VncServer.Tests;
 
+[Collection("HardwareCapture")]
 public class DxgiAndStreamingTests
 {
     [Fact]

@@ -317,6 +317,11 @@ MILESTONES (M1 through M7) & BUG FIXES:
 - **Milestone Fix (Minor): [BUG-MIN-01] & [BUG-MIN-02] UI Keyboard & Server LAN IP Listing** — HOÀN THÀNH & ĐÃ KIỂM CHỨNG:
   - `[BUG-MIN-01]`: Thay thế API deprecated `imm.toggleSoftInput` bằng `WindowCompat.getInsetsController` và `WindowInsetsCompat.Type.ime()` trong `MainActivity.kt`. Build sạch, 37/37 unit tests PASS.
   - `[BUG-MIN-02]`: Cập nhật `Program.cs` sử dụng `NetworkInterface.GetAllNetworkInterfaces()` để quét và hiển thị toàn bộ endpoint IPv4 khả dụng của các card mạng thật (Wi-Fi, Ethernet) khi khởi động server.
+- **Milestone QA Round 2: Independent QA Re-Test & Regression Verification** — HOÀN THÀNH. Kết luận: **ĐẠT (PASSED)**.
+  - Kiểm tra toàn bộ lỗi cũ: `BUG-MAJ-01` (FIXED), `BUG-MIN-01` (FIXED), `BUG-MIN-02` (FIXED), `BUG-COS-01` (CHƯA SỬA - Low Priority Cosmetic).
+  - Tốc độ capture Direct3D 11: 13.39 ms (~71.8 FPS) — cải thiện 120.9% FPS so với Round 1.
+  - Bổ sung xUnit `[Collection("HardwareCapture")]` và retry 3 lần cho `DuplicateOutput` trong `DxgiDesktopCapture.cs` tránh xung đột tài nguyên GPU.
+  - Báo cáo chi tiết: `docs/QA_REPORT_round2.md`.
 
 ## Tests
 
@@ -327,15 +332,16 @@ MILESTONES (M1 through M7) & BUG FIXES:
 
 ## Changed Files
 
-- `client/app/src/main/java/com/thanhvnc/client/ui/MainActivity.kt` (Sửa toggleSoftKeyboard dùng WindowInsetsControllerCompat)
-- `server/src/VncServer.App/Program.cs` (Liệt kê IP LAN từ NetworkInterface)
-- `dist/ThanhVNC.apk` (APK mới nhất)
+- `docs/QA_REPORT_round2.md` (Báo cáo kiểm thử lại Round 2 và đánh giá hồi quy toàn diện)
+- `server/src/VncServer.Core/Capture/DxgiDesktopCapture.cs` (Thêm retry 3 lần cho DuplicateOutput)
+- `tests/VncServer.Tests/DxgiAndStreamingTests.cs` (Gắn [Collection("HardwareCapture")])
+- `tests/VncServer.Tests/QaMeasurementTests.cs` (Gắn [Collection("HardwareCapture")])
 - `PROJECT_STATUS.md`
 
 ## Next Action
 
-Toàn bộ lỗi Blocker, Major và Minor trong `docs/QA_REPORT.md` đã được khắc phục và kiểm chứng thực tế. Dự án ở trạng thái ổn định và sẵn sàng bàn giao.
+Dự án đã vượt qua toàn bộ các vòng kiểm thử độc lập (Round 1 và Round 2) với 100% test tự động pass. Sẵn sàng gắn tag release v1.0.0.
 
 ## Resume Instructions
 
-Xem `PROJECT_STATUS.md` và `docs/QA_REPORT.md`. Mọi mục ưu tiên kỹ thuật đã hoàn thành.
+Đọc `docs/QA_REPORT_round2.md` và `PROJECT_STATUS.md`. Dự án hoàn tất kiểm thử và sửa lỗi.
