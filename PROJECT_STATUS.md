@@ -299,44 +299,46 @@ Build a working, low-latency Windows VNC Server and Android VNC Client.
 
 ## Current State
 
-MILESTONES (M1 through M7) & INDEPENDENT QA / SECURITY REVIEW:
+MILESTONES (M1 through M7) & BUG FIXES:
 - Milestone M1: Foundations, Clean Architecture & CI — COMPLETED & VERIFIED.
-- Milestone M2: High-Performance DXGI Desktop Duplication & Adaptive Streaming — COMPLETED (Lưu ý: phát hiện lỗi Major COM Vtable slot 9 vs 7 trên Dual-GPU).
+- Milestone M2: High-Performance DXGI Desktop Duplication & Adaptive Streaming — COMPLETED & VERIFIED (Đã sửa lỗi Major BUG-MAJ-01: DXGI VTable slot & Dual-GPU adapter enumeration).
 - Milestone M3: Mandatory TLS 1.3/1.2 Security, TOFU Pinning & PBKDF2 Auth — COMPLETED & VERIFIED.
 - Milestone M4: LAN UDP Discovery & Cryptographic Session Resumption — COMPLETED & VERIFIED.
 - Milestone M5: RealVNC-Grade Touch Gestures, Decoupled Cursor & Vietnamese IME — COMPLETED & VERIFIED.
 - Milestone M6: Advanced Session Control, Remote Screenshots & Wake-on-LAN — COMPLETED & VERIFIED.
 - Milestone M7: Single-File Packaging, Inno Setup, PROTOCOL.md & RealVNC Benchmarks — COMPLETED & VERIFIED.
-- **Milestone QA: Independent QA & Security Review (Groups A–G)** — HOÀN THÀNH. Kết luận: **ĐẠT CÓ ĐIỀU KIỆN**. Báo cáo chi tiết: `docs/QA_REPORT.md`.
+- **Milestone QA: Independent QA & Security Review** — HOÀN THÀNH.
+- **Milestone Fix (Major): [BUG-MAJ-01] DXGI COM VTable & Dual-GPU Desktop Duplication Fix** — HOÀN THÀNH & ĐÃ KIỂM CHỨNG:
+  - Sửa `IID_IDXGIOutput1` thành `00cddea8-939b-4b83-a340-a685226666cc` và `IID_ID3D11Texture2D` thành `6f15aaf2-d208-4e89-9ab4-489535d34f9c`.
+  - Sửa VTable slots: `GetAdapter` (slot 7), `AcquireNextFrame` (slot 8), `ReleaseFrame` (slot 14).
+  - Tự động enumerate Adapters qua `CreateDXGIFactory1` + `EnumAdapters1` và gắn `DesktopHelper.AttachToInputDesktop()`.
+  - **Bằng chứng thực tế:** `HybridScreenCapture.IsUsingDxgi` chuyển từ `False` sang `True`. Tốc độ capture tăng từ 30.76 ms (~32.5 FPS) lên 13.39 ms (~71.8 FPS) trên màn hình 1920x1080.
+  - Bổ sung regression test: `DxgiDesktopCapture_Direct3D11Duplication_InitializesAndCapturesHardwareFrame` (PASS).
 
 ## Tests
 
 - Full automated suite: `scripts\test-all.bat` — ALL TESTS & BUILDS PASSED.
-- Windows Server Tests: `dotnet test server/VncServer.sln -c Release` — 104 passed (92 baseline + 12 QA measurement tests), 0 failed, 0 skipped.
+- Windows Server Tests: `dotnet test server/VncServer.sln -c Release` — 105 passed (92 baseline + 12 QA tests + 1 regression test), 0 failed, 0 skipped.
 - Android Client Tests: `gradlew test` (in `client/`) — 37 passed, 0 failed, 0 skipped.
 - Android APK Assembly: `gradlew assembleDebug` (in `client/`) — BUILD SUCCESSFUL (output: `dist/ThanhVNC.apk`, 6,925,941 bytes).
-- QA Empirical Benchmarks:
-  - Network Loopback RTT: Min = 0.08 ms, Avg = 0.11 ms, p95 = 0.18 ms.
+- Đo lường thực tế sau khi sửa DXGI:
+  - Capture & Encode JPEG Time: 13.39 ms (~71.8 FPS).
+  - Loopback RTT: 0.11 ms.
   - Connect & Auth Time: 11.92 ms.
-  - GDI Capture & JPEG Encode: 30.76 ms (~32.5 FPS).
-  - Stress Test: 50 consecutive TCP connect/disconnect in 22 ms (0.45 ms/cycle).
-  - Vietnamese IME: 207 compound Unicode chars verified 100% fidelity.
-  - Rate Limiting: 3 failures -> 30s block, 5 failures -> 5m block verified.
-  - Protocol Fuzzing: 1,000 malformed packets handled safely with zero crashes.
 
 ## Changed Files
 
-- `docs/QA_REPORT.md` (Tài liệu báo cáo kiểm thử độc lập toàn diện nhóm A-G)
-- `tests/VncServer.Tests/QaMeasurementTests.cs` (12 bài kiểm thử đo lường hiệu năng và kiểm chứng an ninh thực tế)
-- `tests/VncServer.Tests/VncServer.Tests.csproj` (Bật `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>` phục vụ chẩn đoán COM Direct3D/DXGI)
+- `server/src/VncServer.Core/Capture/DxgiDesktopCapture.cs` (Sửa VTable slots, GUIDs, Dual-GPU adapter enumeration, AttachToInputDesktop)
+- `tests/VncServer.Tests/DxgiAndStreamingTests.cs` (Thêm regression test phần cứng DXGI)
+- `tests/VncServer.Tests/QaMeasurementTests.cs` (Cập nhật GUID chuẩn và kiểm tra thực tế)
 - `PROJECT_STATUS.md`
 
 ## Next Action
 
-Thực hiện khắc phục Top 10 khuyến nghị trong `docs/QA_REPORT.md`:
-1. [P1] Sửa lỗi COM VTable slot 9 thành slot 7 trong `DxgiDesktopCapture.cs`.
-2. [P2] Bổ sung cơ chế chọn GPU Adapter sở hữu màn hình active thông qua `CreateDXGIFactory1` và `EnumAdapters1` để kích hoạt Direct3D Desktop Duplication trên laptop Optimus (Dual-GPU).
+Tiếp tục khắc phục các lỗi Minor trong `docs/QA_REPORT.md`:
+1. [BUG-MIN-01] Cập nhật Soft Keyboard API trên Android trong `MainActivity.kt` sang `WindowInsetsControllerCompat`.
+2. [BUG-MIN-02] In danh sách IP LAN khả dụng khi Server khởi động trong `Program.cs`.
 
 ## Resume Instructions
 
-Đọc `docs/QA_REPORT.md` và `tests/VncServer.Tests/QaMeasurementTests.cs`. Bắt đầu khắc phục lỗi Major [BUG-MAJ-01] trong `server/src/VncServer.Core/Capture/DxgiDesktopCapture.cs`.
+Tiến hành sửa các lỗi Minor [BUG-MIN-01] và [BUG-MIN-02].

@@ -65,4 +65,21 @@ public class DxgiAndStreamingTests
             Assert.Equal(idx1, idx2);
         }
     }
+
+    [Fact]
+    public void DxgiDesktopCapture_Direct3D11Duplication_InitializesAndCapturesHardwareFrame()
+    {
+        using var dxgi = new DxgiDesktopCapture(70);
+        Assert.True(dxgi.IsInitialized, "DxgiDesktopCapture failed to initialize hardware duplication.");
+        Assert.False(dxgi.IsAccessLost, "DxgiDesktopCapture reported access lost immediately.");
+        Assert.True(dxgi.Width >= 800, $"Unexpected width: {dxgi.Width}");
+        Assert.True(dxgi.Height >= 600, $"Unexpected height: {dxgi.Height}");
+
+        byte[]? frame = dxgi.CaptureJpeg(out uint frameIndex, force: true);
+        Assert.NotNull(frame);
+        Assert.True(frame.Length > 1024, "Captured frame too small.");
+        Assert.Equal(0xFF, frame[0]);
+        Assert.Equal(0xD8, frame[1]);
+        Assert.True(frameIndex > 0);
+    }
 }

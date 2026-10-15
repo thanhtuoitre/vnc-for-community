@@ -32,6 +32,7 @@ public class QaMeasurementTests
     public void QA_A1_DisplayAndCapture_ResolutionAndDpi_Measured()
     {
         DesktopHelper.EnableDpiAwareness();
+        DesktopHelper.AttachToInputDesktop();
         using var capture = new HybridScreenCapture(70);
 
         _output.WriteLine($"[QA-A] Screen Capture Width: {capture.Width}px, Height: {capture.Height}px");
@@ -88,7 +89,7 @@ public class QaMeasurementTests
             _output.WriteLine($"[QA-A DIAG] QueryInterface IDXGIOutput (base) hr: 0x{hr:X8}");
             if (output0 != IntPtr.Zero) System.Runtime.InteropServices.Marshal.Release(output0);
 
-            var iidOutput1 = new Guid("00cddea8-939b-4b82-bc17-cd0cf09743e2");
+            var iidOutput1 = new Guid("00cddea8-939b-4b83-a340-a685226666cc");
             hr = System.Runtime.InteropServices.Marshal.QueryInterface(output, ref iidOutput1, out IntPtr output1);
             _output.WriteLine($"[QA-A DIAG] QueryInterface IDXGIOutput1 hr: 0x{hr:X8}");
             if (output1 != IntPtr.Zero)
@@ -130,7 +131,7 @@ public class QaMeasurementTests
                         _output.WriteLine($"[QA-A DIAG] Adapter [{i}] EnumOutputs [{outIdx}] hr: 0x{hr:X8}");
                         if (hr != 0 || outObj == IntPtr.Zero) break;
 
-                        var iidOut1 = new Guid("00cddea8-939b-4b82-bc17-cd0cf09743e2");
+                        var iidOut1 = new Guid("00cddea8-939b-4b83-a340-a685226666cc");
                         hr = System.Runtime.InteropServices.Marshal.QueryInterface(outObj, ref iidOut1, out IntPtr out1);
                         _output.WriteLine($"[QA-A DIAG] Adapter [{i}] Output [{outIdx}] QueryInterface IDXGIOutput1 hr: 0x{hr:X8}");
                         if (out1 != IntPtr.Zero) System.Runtime.InteropServices.Marshal.Release(out1);

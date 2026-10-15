@@ -2,12 +2,14 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using VncServer.Core.Codecs;
+using VncServer.Core.Native;
 
 namespace VncServer.Core.Capture;
 
 public sealed unsafe class DxgiDesktopCapture : IDisposable
 {
     private const int D3D11_SDK_VERSION = 7;
+    private const int D3D_DRIVER_TYPE_UNKNOWN = 0;
     private const int D3D_DRIVER_TYPE_HARDWARE = 1;
     private const uint D3D11_CREATE_DEVICE_BGRA_SUPPORT = 0x20;
     private const int DXGI_FORMAT_B8G8R8A8_UNORM = 87;
@@ -32,9 +34,27 @@ public sealed unsafe class DxgiDesktopCapture : IDisposable
         out int pFeatureLevel,
         out IntPtr ppImmediateContext);
 
+    [DllImport("dxgi.dll", EntryPoint = "CreateDXGIFactory1", SetLastError = true)]
+    private static extern int CreateDXGIFactory1(ref Guid riid, out IntPtr ppFactory);
+
+    private static readonly Guid IID_IDXGIFactory1 = new("770aae78-f26f-4dba-a829-253c83d1b387");
     private static readonly Guid IID_IDXGIDevice = new("54ec77fa-1377-44e6-8c32-88fd5f44c84c");
-    private static readonly Guid IID_IDXGIOutput1 = new("00cddea8-939b-4b82-bc17-cd0cf09743e2");
-    private static readonly Guid IID_ID3D11Texture2D = new("6f156113-ed4f-42e0-9324-124634f4e16c");
+    private static readonly Guid IID_IDXGIOutput1 = new("00cddea8-939b-4b83-a340-a685226666cc");
+    private static readonly Guid IID_ID3D11Texture2D = new("6f15aaf2-d208-4e89-9ab4-489535d34f9c");
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct DXGI_OUTPUT_DESC
+    {
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string DeviceName;
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+        public int AttachedToDesktop;
+        public int Rotation;
+        public IntPtr Monitor;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     public struct DXGI_OUTDUPL_FRAME_INFO
@@ -104,7 +124,93 @@ public sealed unsafe class DxgiDesktopCapture : IDisposable
 
         try
         {
-            int hr = D3D11CreateDevice(
+            DesktopHelper.AttachToInputDesktop();
+
+            // 1. First attempt: Enumerate all adapters via CreateDXGIFactory1 (vital for Dual-GPU / NVIDIA Optimus)
+            var iidFactory1 = IID_IDXGIFactory1;
+            int hr = CreateDXGIFactory1(ref iidFactory1, out IntPtr factory);
+            if (hr == S_OK && factory != IntPtr.Zero)
+            {
+                try
+                {
+                    IntPtr* vtblFactory = *(IntPtr**)factory;
+                    var enumAdapters1 = (delegate* unmanaged[Stdcall]<IntPtr, uint, out IntPtr, int>)vtblFactory[12];
+
+                    for (uint adpIdx = 0; adpIdx < 4; adpIdx++)
+                    {
+                        hr = enumAdapters1(factory, adpIdx, out IntPtr adapter);
+                        if (hr != S_OK || adapter == IntPtr.Zero) break;
+
+                        try
+                        {
+                            IntPtr* vtblAdapter = *(IntPtr**)adapter;
+                            var enumOutputs = (delegate* unmanaged[Stdcall]<IntPtr, uint, out IntPtr, int>)vtblAdapter[7];
+                            hr = enumOutputs(adapter, (uint)outputIndex, out IntPtr output);
+                            if (hr != S_OK || output == IntPtr.Zero) continue;
+
+                            try
+                            {
+                                var iidOutput1 = IID_IDXGIOutput1;
+                                hr = Marshal.QueryInterface(output, ref iidOutput1, out IntPtr output1);
+                                if (hr != S_OK || output1 == IntPtr.Zero) continue;
+
+                                try
+                                {
+                                    hr = D3D11CreateDevice(
+                                        adapter,
+                                        D3D_DRIVER_TYPE_UNKNOWN,
+                                        IntPtr.Zero,
+                                        D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                                        null,
+                                        0,
+                                        D3D11_SDK_VERSION,
+                                        out _d3dDevice,
+                                        out _,
+                                        out _d3dContext);
+
+                                    if (hr == S_OK && _d3dDevice != IntPtr.Zero)
+                                    {
+                                        IntPtr* vtblOutput1 = *(IntPtr**)output1;
+                                        var duplicateOutput = (delegate* unmanaged[Stdcall]<IntPtr, IntPtr, out IntPtr, int>)vtblOutput1[22];
+                                        hr = duplicateOutput(output1, _d3dDevice, out _outputDuplication);
+
+                                        if (hr == S_OK && _outputDuplication != IntPtr.Zero)
+                                        {
+                                            var getDesc = (delegate* unmanaged[Stdcall]<IntPtr, out DXGI_OUTPUT_DESC, int>)vtblOutput1[7];
+                                            if (getDesc(output1, out var desc) == S_OK)
+                                            {
+                                                Width = desc.Right - desc.Left;
+                                                Height = desc.Bottom - desc.Top;
+                                            }
+                                            return true;
+                                        }
+                                    }
+                                    CleanupDxgi();
+                                }
+                                finally
+                                {
+                                    Marshal.Release(output1);
+                                }
+                            }
+                            finally
+                            {
+                                Marshal.Release(output);
+                            }
+                        }
+                        finally
+                        {
+                            Marshal.Release(adapter);
+                        }
+                    }
+                }
+                finally
+                {
+                    Marshal.Release(factory);
+                }
+            }
+
+            // 2. Fallback: Default adapter device creation
+            hr = D3D11CreateDevice(
                 IntPtr.Zero,
                 D3D_DRIVER_TYPE_HARDWARE,
                 IntPtr.Zero,
@@ -121,43 +227,46 @@ public sealed unsafe class DxgiDesktopCapture : IDisposable
                 return false;
             }
 
-            // Query IDXGIDevice
             var iidDevice = IID_IDXGIDevice;
             hr = Marshal.QueryInterface(_d3dDevice, ref iidDevice, out IntPtr dxgiDevice);
             if (hr != S_OK || dxgiDevice == IntPtr.Zero) return false;
 
-            // GetAdapter
             IntPtr* vtblDevice = *(IntPtr**)dxgiDevice;
-            var getAdapter = (delegate* unmanaged[Stdcall]<IntPtr, out IntPtr, int>)vtblDevice[9];
+            var getAdapter = (delegate* unmanaged[Stdcall]<IntPtr, out IntPtr, int>)vtblDevice[7]; // Slot 7 is GetAdapter
             hr = getAdapter(dxgiDevice, out IntPtr dxgiAdapter);
             Marshal.Release(dxgiDevice);
             if (hr != S_OK || dxgiAdapter == IntPtr.Zero) return false;
 
-            // EnumOutputs(outputIndex)
-            IntPtr* vtblAdapter = *(IntPtr**)dxgiAdapter;
-            var enumOutputs = (delegate* unmanaged[Stdcall]<IntPtr, uint, out IntPtr, int>)vtblAdapter[7];
-            hr = enumOutputs(dxgiAdapter, (uint)outputIndex, out IntPtr dxgiOutput);
+            IntPtr* vtblAdp = *(IntPtr**)dxgiAdapter;
+            var enumOut = (delegate* unmanaged[Stdcall]<IntPtr, uint, out IntPtr, int>)vtblAdp[7];
+            hr = enumOut(dxgiAdapter, (uint)outputIndex, out IntPtr dxgiOutput);
             Marshal.Release(dxgiAdapter);
             if (hr != S_OK || dxgiOutput == IntPtr.Zero) return false;
 
-            // Query IDXGIOutput1
-            var iidOutput1 = IID_IDXGIOutput1;
-            hr = Marshal.QueryInterface(dxgiOutput, ref iidOutput1, out IntPtr dxgiOutput1);
+            var iidOut1 = IID_IDXGIOutput1;
+            hr = Marshal.QueryInterface(dxgiOutput, ref iidOut1, out IntPtr dxgiOutput1);
             Marshal.Release(dxgiOutput);
             if (hr != S_OK || dxgiOutput1 == IntPtr.Zero) return false;
 
-            // DuplicateOutput
-            IntPtr* vtblOutput1 = *(IntPtr**)dxgiOutput1;
-            var duplicateOutput = (delegate* unmanaged[Stdcall]<IntPtr, IntPtr, out IntPtr, int>)vtblOutput1[22];
-            hr = duplicateOutput(dxgiOutput1, _d3dDevice, out _outputDuplication);
-            Marshal.Release(dxgiOutput1);
+            IntPtr* vtblOut1 = *(IntPtr**)dxgiOutput1;
+            var duplOut = (delegate* unmanaged[Stdcall]<IntPtr, IntPtr, out IntPtr, int>)vtblOut1[22];
+            hr = duplOut(dxgiOutput1, _d3dDevice, out _outputDuplication);
 
-            if (hr != S_OK || _outputDuplication == IntPtr.Zero)
+            if (hr == S_OK && _outputDuplication != IntPtr.Zero)
             {
-                return false;
+                var getDesc = (delegate* unmanaged[Stdcall]<IntPtr, out DXGI_OUTPUT_DESC, int>)vtblOut1[7];
+                if (getDesc(dxgiOutput1, out var desc) == S_OK)
+                {
+                    Width = desc.Right - desc.Left;
+                    Height = desc.Bottom - desc.Top;
+                }
+                Marshal.Release(dxgiOutput1);
+                return true;
             }
 
-            return true;
+            Marshal.Release(dxgiOutput1);
+            CleanupDxgi();
+            return false;
         }
         catch
         {
@@ -177,8 +286,8 @@ public sealed unsafe class DxgiDesktopCapture : IDisposable
         if (!IsInitialized || IsAccessLost) return null;
 
         IntPtr* vtblDupl = *(IntPtr**)_outputDuplication;
-        var acquireNextFrame = (delegate* unmanaged[Stdcall]<IntPtr, uint, out DXGI_OUTDUPL_FRAME_INFO, out IntPtr, int>)vtblDupl[4];
-        var releaseFrame = (delegate* unmanaged[Stdcall]<IntPtr, int>)vtblDupl[10];
+        var acquireNextFrame = (delegate* unmanaged[Stdcall]<IntPtr, uint, out DXGI_OUTDUPL_FRAME_INFO, out IntPtr, int>)vtblDupl[8];
+        var releaseFrame = (delegate* unmanaged[Stdcall]<IntPtr, int>)vtblDupl[14];
 
         int hr = acquireNextFrame(_outputDuplication, 16, out var frameInfo, out IntPtr desktopResource);
 
