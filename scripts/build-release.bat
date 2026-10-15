@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 echo ===================================================
-echo   ThanhVNC Release Build & Packaging Script
+echo   ThanhVNC Release Build ^& Packaging Script
 echo ===================================================
 
 cd /d "%~dp0\.."
