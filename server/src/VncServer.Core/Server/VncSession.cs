@@ -31,6 +31,7 @@ public sealed class VncSession : IAsyncDisposable
     private byte[]? _currentSessionToken;
     private readonly CancellationTokenSource _sessionCts = new();
     private readonly SemaphoreSlim _sendLock = new(1, 1);
+    private int _isDisposed;
 
     public string RemoteEndPoint => _transport.RemoteEndPoint;
     public SessionState State { get; private set; } = SessionState.Connecting;
@@ -404,7 +405,17 @@ public sealed class VncSession : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _sessionCts.Cancel();
+        if (Interlocked.Exchange(ref _isDisposed, 1) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            _sessionCts.Cancel();
+        }
+        catch (ObjectDisposedException) { }
+
         _sessionCts.Dispose();
         _sendLock.Dispose();
         await _transport.DisposeAsync().ConfigureAwait(false);

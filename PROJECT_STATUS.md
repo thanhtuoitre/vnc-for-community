@@ -322,26 +322,34 @@ MILESTONES (M1 through M7) & BUG FIXES:
   - Tốc độ capture Direct3D 11: 13.39 ms (~71.8 FPS) — cải thiện 120.9% FPS so với Round 1.
   - Bổ sung xUnit `[Collection("HardwareCapture")]` và retry 3 lần cho `DuplicateOutput` trong `DxgiDesktopCapture.cs` tránh xung đột tài nguyên GPU.
   - Báo cáo chi tiết: `docs/QA_REPORT_round2.md`.
+- **Milestone QA Round 3: Real-World Empirical Verification & Deep Hardening** — HOÀN THÀNH:
+  - Độ trễ End-to-End Input $\rightarrow$ Display (30 mẫu đo Loopback TCP/TLS 1.3): Min: 0.42 ms, Avg: 16.21 ms, p95: 25.71 ms, Max: 97.83 ms. Xác nhận rõ ràng chỉ đo trên Loopback cùng máy, không gọi là LAN.
+  - Giả lập mạng suy hao (Degraded Network Proxy): 100ms RTT proxy, Heartbeat RTT đo được 405.47 ms, Adaptive Streaming QualityControl (Quality 40, FPS 15) áp dụng thành công.
+  - Stress Test 100 chu kỳ Connect/Disconnect TCP/TLS 1.3 thật: 100/100 thành công trong 1.241 ms (Avg: 12.42 ms, p95: 20.19 ms).
+  - Sửa lỗi race condition trong `VncSession.DisposeAsync()` bằng atomic guard `Interlocked.Exchange(ref _isDisposed, 1)` chống double dispose và `ObjectDisposedException`.
+  - Phân quyền View-Only & Clipboard: Chặn triệt để Win32 `SendInput`, `SessionControl` và `WindowsClipboard.SetText`. Toàn bộ thử nghiệm bypass thất bại.
+  - Wire Encryption & TOFU: TLS 1.3 bảo mật, client từ chối kết nối ngay khi fingerprint SHA-256 bị đổi lệch (`F4:03...` vs `4D:D8...`).
+  - Quét an ninh kho mã nguồn: 4.141 file được quét regex, 0 secret, 0 private key, 0 token.
+  - Soak test lấy mẫu (50 chu kỳ capture liên tục): RAM Delta: -11 MB (118MB $\rightarrow$ 107MB), Handle Delta: +1 handle (952 $\rightarrow$ 953), Direct3D 11 ổn định.
+  - Báo cáo chi tiết: `docs/QA_REPORT_round3.md`.
 
 ## Tests
 
-- Full automated suite: `scripts\test-all.bat` — ALL TESTS & BUILDS PASSED.
-- Windows Server Tests: `dotnet test server/VncServer.sln -c Release` — 105 passed, 0 failed, 0 skipped.
+- Windows Server Tests: `dotnet test server/VncServer.sln -c Release` — **112 passed, 0 failed, 0 skipped** (toàn bộ 7 Round 3 deep tests PASS).
 - Android Client Tests: `gradlew test` (in `client/`) — 37 passed, 0 failed, 0 skipped.
 - Android APK Assembly: `gradlew assembleDebug` (in `client/`) — BUILD SUCCESSFUL (output: `dist/ThanhVNC.apk`, 6,021,063 bytes).
 
 ## Changed Files
 
-- `docs/QA_REPORT_round2.md` (Báo cáo kiểm thử lại Round 2 và đánh giá hồi quy toàn diện)
-- `server/src/VncServer.Core/Capture/DxgiDesktopCapture.cs` (Thêm retry 3 lần cho DuplicateOutput)
-- `tests/VncServer.Tests/DxgiAndStreamingTests.cs` (Gắn [Collection("HardwareCapture")])
-- `tests/VncServer.Tests/QaMeasurementTests.cs` (Gắn [Collection("HardwareCapture")])
+- `docs/QA_REPORT_round3.md` (Báo cáo kiểm thử chuyên sâu Vòng 3 với bảng PASS/FAIL/KHÔNG TEST đầy đủ)
+- `server/src/VncServer.Core/Server/VncSession.cs` (Atomic guard chống double dispose trong DisposeAsync)
+- `tests/VncServer.Tests/Round3QaTests.cs` (Suite 7 bài test thực tế chuyên sâu cho Round 3)
 - `PROJECT_STATUS.md`
 
 ## Next Action
 
-Dự án đã vượt qua toàn bộ các vòng kiểm thử độc lập (Round 1 và Round 2) với 100% test tự động pass. Sẵn sàng gắn tag release v1.0.0.
+Dự án đã vượt qua toàn bộ 3 vòng kiểm thử độc lập (Round 1, Round 2, Round 3) với 112/112 server tests và 37/37 client tests pass sạch sẽ. Sẵn sàng tạo checkpoint commit và push origin.
 
 ## Resume Instructions
 
-Đọc `docs/QA_REPORT_round2.md` và `PROJECT_STATUS.md`. Dự án hoàn tất kiểm thử và sửa lỗi.
+Đọc `docs/QA_REPORT_round3.md` và `PROJECT_STATUS.md`. Dự án hoàn tất kiểm thử Round 3.
