@@ -63,18 +63,61 @@ object VncProtocol {
     }
 
     fun serializeAuthRequest(req: AuthRequest): ByteArray {
-        val buf = ByteBuffer.allocate(2 + req.hmacSignature.size).order(ByteOrder.LITTLE_ENDIAN)
+        val resumeLen = req.resumeToken?.size ?: 0
+        val totalSize = 2 + req.hmacSignature.size + (if (resumeLen > 0) 2 + resumeLen else 0)
+        val buf = ByteBuffer.allocate(totalSize).order(ByteOrder.LITTLE_ENDIAN)
         buf.putShort(req.hmacSignature.size.toShort())
         buf.put(req.hmacSignature)
+        if (resumeLen > 0 && req.resumeToken != null) {
+            buf.putShort(resumeLen.toShort())
+            buf.put(req.resumeToken)
+        }
         return buf.array()
     }
 
-    fun serializeAuthResponse(res: AuthResponse): ByteArray = byteArrayOf(res.statusCode, res.permissions)
+    fun deserializeAuthRequest(payload: ByteArray): AuthRequest {
+        require(payload.size >= 2) { "Auth request empty" }
+        val buf = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
+        val sigLen = buf.short.toInt() and 0xFFFF
+        require(payload.size >= 2 + sigLen) { "Auth signature truncated" }
+        val sig = ByteArray(sigLen)
+        buf.get(sig)
+        var resumeToken: ByteArray? = null
+        if (payload.size >= 2 + sigLen + 2) {
+            val tokenLen = buf.short.toInt() and 0xFFFF
+            if (payload.size >= 2 + sigLen + 2 + tokenLen && tokenLen > 0) {
+                resumeToken = ByteArray(tokenLen)
+                buf.get(resumeToken)
+            }
+        }
+        return AuthRequest(sig, resumeToken)
+    }
+
+    fun serializeAuthResponse(res: AuthResponse): ByteArray {
+        val token = res.sessionToken
+        if (token == null || token.isEmpty()) return byteArrayOf(res.statusCode, res.permissions)
+        val buf = ByteBuffer.allocate(2 + 2 + token.size).order(ByteOrder.LITTLE_ENDIAN)
+        buf.put(res.statusCode)
+        buf.put(res.permissions)
+        buf.putShort(token.size.toShort())
+        buf.put(token)
+        return buf.array()
+    }
 
     fun deserializeAuthResponse(payload: ByteArray): AuthResponse {
         require(payload.isNotEmpty()) { "Auth response empty" }
         val permissions = if (payload.size >= 2) payload[1] else SessionPermissions.FULL_CONTROL
-        return AuthResponse(payload[0], permissions)
+        var sessionToken: ByteArray? = null
+        if (payload.size >= 4) {
+            val buf = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
+            buf.position(2)
+            val tokenLen = buf.short.toInt() and 0xFFFF
+            if (payload.size >= 4 + tokenLen && tokenLen > 0) {
+                sessionToken = ByteArray(tokenLen)
+                buf.get(sessionToken)
+            }
+        }
+        return AuthResponse(payload[0], permissions, sessionToken)
     }
 
     fun deserializeScreenFrame(payload: ByteArray): ScreenFrame {

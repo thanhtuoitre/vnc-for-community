@@ -27,6 +27,8 @@ public sealed class VncSession : IAsyncDisposable
     private readonly string _password;
     private readonly IVncLogger? _logger;
     private readonly Security.IpRateLimiter? _rateLimiter;
+    private readonly Security.SessionResumeManager? _resumeManager;
+    private byte[]? _currentSessionToken;
     private readonly CancellationTokenSource _sessionCts = new();
     private readonly SemaphoreSlim _sendLock = new(1, 1);
 
@@ -40,6 +42,7 @@ public sealed class VncSession : IAsyncDisposable
         string password,
         IVncLogger? logger = null,
         Security.IpRateLimiter? rateLimiter = null,
+        Security.SessionResumeManager? resumeManager = null,
         SessionPermissions permissions = SessionPermissions.FullControl)
     {
         _transport = transport;
@@ -47,6 +50,7 @@ public sealed class VncSession : IAsyncDisposable
         _password = password;
         _logger = logger;
         _rateLimiter = rateLimiter;
+        _resumeManager = resumeManager;
         Permissions = permissions;
     }
 
@@ -56,7 +60,7 @@ public sealed class VncSession : IAsyncDisposable
         string password,
         Action<string>? log = null,
         Security.IpRateLimiter? rateLimiter = null)
-        : this(new TcpVncTransport(client), capture, password, log != null ? new ActionVncLogger(log) : null, rateLimiter)
+        : this(new TcpVncTransport(client), capture, password, log != null ? new ActionVncLogger(log) : null, rateLimiter, null)
     {
     }
 
@@ -137,25 +141,55 @@ public sealed class VncSession : IAsyncDisposable
         if (authType != VncMessageType.AuthRequest) return false;
 
         var authReq = VncProtocol.DeserializeAuthRequest(authPayload);
-        bool isValid = VncProtocol.VerifyHmac(challenge, authReq.HmacSignature, _password);
+        bool isValid = false;
+
+        // Check for session resumption first
+        if (authReq.ResumeToken != null && _resumeManager != null && _transport.RemoteAddress is IPAddress resumeAddr)
+        {
+            if (_resumeManager.TryResumeSession(authReq.ResumeToken, resumeAddr, out var resumedPerms))
+            {
+                isValid = true;
+                Permissions = resumedPerms;
+                _logger?.Info($"[{RemoteEndPoint}] Session successfully resumed via resumption token.");
+                Security.SessionAuditLogger.RecordEvent("SESSION_RESUME", RemoteEndPoint, $"Permissions: {Permissions}");
+            }
+            else
+            {
+                _logger?.Warn($"[{RemoteEndPoint}] Session resumption token invalid or expired. Falling back to credential auth.");
+            }
+        }
+
+        if (!isValid)
+        {
+            isValid = VncProtocol.VerifyHmac(challenge, authReq.HmacSignature, _password);
+        }
 
         if (_transport.RemoteAddress is IPAddress address)
         {
             if (isValid)
             {
                 _rateLimiter?.RecordAuthSuccess(address);
-                Security.SessionAuditLogger.RecordEvent("AUTH_SUCCESS", RemoteEndPoint, $"Permissions: {Permissions}");
+                if (authReq.ResumeToken == null)
+                {
+                    Security.SessionAuditLogger.RecordEvent("AUTH_SUCCESS", RemoteEndPoint, $"Permissions: {Permissions}");
+                }
             }
             else
             {
                 _rateLimiter?.RecordAuthFailure(address);
-                Security.SessionAuditLogger.RecordEvent("AUTH_FAILURE", RemoteEndPoint, "Invalid HMAC challenge signature");
+                Security.SessionAuditLogger.RecordEvent("AUTH_FAILURE", RemoteEndPoint, "Invalid credentials or challenge signature");
             }
         }
 
-        // 4. Send AuthResponse
+        // 4. Issue fresh session resumption token on success
+        if (isValid && _resumeManager != null && _transport.RemoteAddress is IPAddress tokenAddr)
+        {
+            _currentSessionToken = _resumeManager.CreateSessionToken(tokenAddr, Permissions);
+        }
+
+        // 5. Send AuthResponse
         byte status = isValid ? (byte)0 : (byte)1;
-        await SendPacketAsync(VncMessageType.AuthResponse, VncProtocol.SerializeAuthResponse(new AuthResponse(status, (byte)Permissions)), ct).ConfigureAwait(false);
+        await SendPacketAsync(VncMessageType.AuthResponse, VncProtocol.SerializeAuthResponse(new AuthResponse(status, (byte)Permissions, _currentSessionToken)), ct).ConfigureAwait(false);
 
         return isValid;
     }
@@ -164,7 +198,21 @@ public sealed class VncSession : IAsyncDisposable
     {
         while (!ct.IsCancellationRequested)
         {
-            var (type, payload) = await ReadPacketAsync(ct).ConfigureAwait(false);
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
+
+            (VncMessageType type, byte[] payload) packet;
+            try
+            {
+                packet = await ReadPacketAsync(linkedCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
+            {
+                _logger?.Warn($"[{RemoteEndPoint}] Connection timed out (15s inactivity without heartbeat/input). Terminating dead connection.");
+                throw new TimeoutException($"Client inactivity timeout on {RemoteEndPoint}");
+            }
+
+            var (type, payload) = packet;
             switch (type)
             {
                 case VncMessageType.MouseInput:
@@ -206,6 +254,10 @@ public sealed class VncSession : IAsyncDisposable
 
                 case VncMessageType.Disconnect:
                     _logger?.Info($"[{RemoteEndPoint}] Client requested disconnect.");
+                    if (_currentSessionToken != null && _resumeManager != null)
+                    {
+                        _resumeManager.InvalidateSession(_currentSessionToken);
+                    }
                     return;
 
                 default:

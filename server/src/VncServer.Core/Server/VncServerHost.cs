@@ -13,14 +13,20 @@ public sealed class VncServerHost : IAsyncDisposable
     private readonly string _password;
     private readonly IVncLogger? _logger;
     private readonly Security.IpRateLimiter _rateLimiter = new();
+    private readonly Security.SessionResumeManager _resumeManager = new();
     private readonly ConcurrentDictionary<VncSession, byte> _sessions = new();
     private readonly CancellationTokenSource _cts = new();
     private Task? _acceptTask;
+    private Network.LanDiscoveryService? _discoveryService;
+    private Network.UpnpPortForwarder? _upnpForwarder;
 
     public int Port { get; }
     public bool IsRunning { get; private set; }
     public System.Security.Cryptography.X509Certificates.X509Certificate2? ServerCertificate { get; }
     public bool UseTls { get; }
+    public bool EnableDiscovery { get; }
+    public bool EnableUpnp { get; }
+    public string? ServerName { get; }
 
     public VncServerHost(
         int port,
@@ -29,7 +35,10 @@ public sealed class VncServerHost : IAsyncDisposable
         IVncLogger? logger = null,
         IScreenCapture? capture = null,
         System.Security.Cryptography.X509Certificates.X509Certificate2? serverCertificate = null,
-        bool useTls = false)
+        bool useTls = false,
+        bool enableDiscovery = true,
+        bool enableUpnp = false,
+        string? serverName = null)
     {
         Port = port;
         _password = password;
@@ -38,6 +47,9 @@ public sealed class VncServerHost : IAsyncDisposable
         _listener = new TcpListener(IPAddress.Any, port);
         ServerCertificate = serverCertificate;
         UseTls = useTls || serverCertificate != null;
+        EnableDiscovery = enableDiscovery;
+        EnableUpnp = enableUpnp;
+        ServerName = serverName;
     }
 
     public VncServerHost(int port, string password, int captureQuality, Action<string>? log)
@@ -52,6 +64,19 @@ public sealed class VncServerHost : IAsyncDisposable
         IsRunning = true;
         _logger?.Info($"VNC Server listening on port {Port} (TLS: {UseTls})...");
         _acceptTask = AcceptConnectionsAsync(_cts.Token);
+
+        if (EnableDiscovery)
+        {
+            string? fp = ServerCertificate != null ? Convert.ToHexString(ServerCertificate.GetCertHash(System.Security.Cryptography.HashAlgorithmName.SHA256)) : null;
+            _discoveryService = new Network.LanDiscoveryService(Port, UseTls, fp, ServerName, _logger);
+            _discoveryService.Start();
+        }
+
+        if (EnableUpnp)
+        {
+            _upnpForwarder = new Network.UpnpPortForwarder(_logger);
+            _ = Task.Run(async () => await _upnpForwarder.ForwardPortAsync(Port).ConfigureAwait(false));
+        }
     }
 
     private async Task AcceptConnectionsAsync(CancellationToken ct)
@@ -81,7 +106,7 @@ public sealed class VncServerHost : IAsyncDisposable
                 {
                     transport = new Transport.TcpVncTransport(tcpClient);
                 }
-                var session = new VncSession(transport, _capture, _password, _logger, _rateLimiter);
+                var session = new VncSession(transport, _capture, _password, _logger, _rateLimiter, _resumeManager);
                 _sessions.TryAdd(session, 0);
 
                 _logger?.Info($"Accepted connection from {session.RemoteEndPoint}");
@@ -131,6 +156,19 @@ public sealed class VncServerHost : IAsyncDisposable
             await session.DisposeAsync().ConfigureAwait(false);
         }
         _sessions.Clear();
+
+        if (_discoveryService != null)
+        {
+            await _discoveryService.DisposeAsync().ConfigureAwait(false);
+            _discoveryService = null;
+        }
+
+        if (_upnpForwarder != null)
+        {
+            await _upnpForwarder.DeletePortMappingAsync(Port).ConfigureAwait(false);
+            _upnpForwarder = null;
+        }
+
         _logger?.Info("VNC Server stopped.");
     }
 

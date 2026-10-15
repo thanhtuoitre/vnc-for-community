@@ -20,7 +20,7 @@ sealed class VncConnectionState {
     data object Handshaking : VncConnectionState()
     data object Authenticating : VncConnectionState()
     data class Connected(val screenWidth: Int, val screenHeight: Int) : VncConnectionState()
-    data class Reconnecting(val attempt: Int, val nextDelayMs: Long) : VncConnectionState()
+    data class Reconnecting(val attempt: Int, val nextDelayMs: Long, val maxAttempts: Int = 10) : VncConnectionState()
     data class Error(val message: String) : VncConnectionState()
 }
 
@@ -50,6 +50,7 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
     private var socket: Socket? = null
     private var job: Job? = null
     private var isManualDisconnect = false
+    private var currentSessionToken: ByteArray? = null
 
     // Channel for immediate priority transmission of input/control packets (bypassing frame reads)
     private val outgoingPackets = Channel<Pair<VncMessageType, ByteArray>>(Channel.BUFFERED)
@@ -77,10 +78,11 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
         job = clientScope.launch {
             var attempt = 1
             var backoffMs = 1000L
+            val maxAttempts = 10
 
             while (isActive && !isManualDisconnect) {
                 try {
-                    _state.value = if (attempt == 1) VncConnectionState.Connecting else VncConnectionState.Reconnecting(attempt, 0)
+                    _state.value = if (attempt == 1) VncConnectionState.Connecting else VncConnectionState.Reconnecting(attempt, 0, maxAttempts)
                     runSession(host, port, password, useTls, expectedFingerprint)
                     attempt = 1
                     backoffMs = 1000L
@@ -89,13 +91,14 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
                 } catch (e: Exception) {
                     if (isManualDisconnect) break
 
-                    if (autoReconnect) {
-                        _state.value = VncConnectionState.Reconnecting(attempt, backoffMs)
-                        delay(backoffMs)
+                    if (autoReconnect && attempt <= maxAttempts) {
+                        val jitter = (backoffMs * (0.8 + 0.4 * Math.random())).toLong()
+                        _state.value = VncConnectionState.Reconnecting(attempt, jitter, maxAttempts)
+                        delay(jitter)
                         attempt++
                         backoffMs = (backoffMs * 2).coerceAtMost(10000L)
                     } else {
-                        _state.value = VncConnectionState.Error(e.message ?: "Connection error")
+                        _state.value = VncConnectionState.Error(if (attempt > maxAttempts) "Mất kết nối sau $maxAttempts lần thử lại" else (e.message ?: "Connection error"))
                         break
                     }
                 } finally {
@@ -140,6 +143,7 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
             sslContext.init(null, arrayOf(trustManager), java.security.SecureRandom())
             val rawSocket = Socket()
             rawSocket.tcpNoDelay = true
+            rawSocket.soTimeout = 12000
             rawSocket.connect(InetSocketAddress(host, port), 5000)
             val sslSocket = sslContext.socketFactory.createSocket(rawSocket, host, port, true) as javax.net.ssl.SSLSocket
             sslSocket.enabledProtocols = arrayOf("TLSv1.3", "TLSv1.2")
@@ -149,6 +153,7 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
         } else {
             val raw = Socket()
             raw.tcpNoDelay = true
+            raw.soTimeout = 12000
             raw.connect(InetSocketAddress(host, port), 5000)
             raw
         }
@@ -172,19 +177,43 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
 
         // 2. Authentication
         _state.value = VncConnectionState.Authenticating
-        val signature = HmacAuth.computeHmac(handshakeRes.challenge, password)
-        val authReq = AuthRequest(signature)
-        sendPacketDirect(outputStream, VncMessageType.AuthRequest, VncProtocol.serializeAuthRequest(authReq))
+        var authenticated = false
+        val token = currentSessionToken
+        if (token != null && token.isNotEmpty()) {
+            // Attempt fast session resumption
+            val resumeReq = AuthRequest(hmacSignature = ByteArray(0), resumeToken = token)
+            sendPacketDirect(outputStream, VncMessageType.AuthRequest, VncProtocol.serializeAuthRequest(resumeReq))
+            val (authType, authPayload) = readPacket(inputStream)
+            if (authType == VncMessageType.AuthResponse) {
+                val authRes = VncProtocol.deserializeAuthResponse(authPayload)
+                if (authRes.statusCode.toInt() == 0) {
+                    authenticated = true
+                    grantedPermissions = authRes.permissions
+                    if (authRes.sessionToken != null) {
+                        currentSessionToken = authRes.sessionToken
+                    }
+                } else {
+                    currentSessionToken = null // Expired or rejected token
+                }
+            }
+        }
 
-        val (authType, authPayload) = readPacket(inputStream)
-        if (authType != VncMessageType.AuthResponse) {
-            throw IllegalStateException("Expected AuthResponse, got $authType")
+        if (!authenticated) {
+            val signature = HmacAuth.computeHmac(handshakeRes.challenge, password)
+            val authReq = AuthRequest(signature)
+            sendPacketDirect(outputStream, VncMessageType.AuthRequest, VncProtocol.serializeAuthRequest(authReq))
+
+            val (authType, authPayload) = readPacket(inputStream)
+            if (authType != VncMessageType.AuthResponse) {
+                throw IllegalStateException("Expected AuthResponse, got $authType")
+            }
+            val authRes = VncProtocol.deserializeAuthResponse(authPayload)
+            if (authRes.statusCode.toInt() != 0) {
+                throw SecurityException("Authentication rejected by server (code ${authRes.statusCode})")
+            }
+            grantedPermissions = authRes.permissions
+            currentSessionToken = authRes.sessionToken
         }
-        val authRes = VncProtocol.deserializeAuthResponse(authPayload)
-        if (authRes.statusCode.toInt() != 0) {
-            throw SecurityException("Authentication rejected by server (code ${authRes.statusCode})")
-        }
-        grantedPermissions = authRes.permissions
 
         _state.value = VncConnectionState.Connected(screenWidth, screenHeight)
 
@@ -270,10 +299,27 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
 
     fun disconnect() {
         isManualDisconnect = true
+        currentSessionToken = null
+        try {
+            val s = socket
+            if (s != null && !s.isClosed) {
+                val header = ByteArray(VncProtocol.HEADER_SIZE)
+                VncProtocol.writeHeader(header, VncMessageType.Disconnect, 0)
+                s.getOutputStream().write(header)
+                s.getOutputStream().flush()
+            }
+        } catch (_: Exception) {}
         job?.cancel()
         job = null
         cleanup()
         _state.value = VncConnectionState.Disconnected
+    }
+
+    fun notifyNetworkChanged() {
+        if (_state.value is VncConnectionState.Reconnecting) {
+            // Cancel current backoff delay to trigger immediate reconnection
+            job?.cancel()
+        }
     }
 
     private fun cleanup() {

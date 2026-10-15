@@ -22,9 +22,35 @@ When the Windows Server and Android Client are connected to the same Wi-Fi or lo
 
 ---
 
-## 2. WAN Deployment via Router Port Forwarding
+## 2. Zero-Config LAN Discovery (UDP 5902)
 
-If the server host has a public IPv4 address (non-CGNAT):
+ThanhVNC Server includes an automated LAN discovery responder:
+- **UDP Port:** `5902`.
+- **Mechanism:** Periodically broadcasts `THVNC_BEACON:` and responds immediately to `THVNC_PROBE` queries from clients on the subnet.
+- **Android Client:** Discovers nearby Windows machines automatically on launch and displays them under the **"Discovered on LAN"** dashboard card with 1-tap connection.
+- **CLI Flags:**
+  - `--no-discovery`: Disables the background UDP beacon.
+  - `--name <ServerName>`: Sets a custom display name broadcasted on LAN.
+
+---
+
+## 3. Automatic Router Port Mapping via UPnP
+
+ThanhVNC Server features built-in Universal Plug and Play (UPnP) IGD automation:
+- Automatically detects the home router's Internet Gateway Device via SSDP discovery (`239.255.255.250:1900`).
+- Configures port forwarding rules over SOAP (`WANIPConnection:1` / `WANPPPConnection:1`) without requiring manual router admin login.
+- Queries and prints your public external WAN IP on startup.
+- **Usage:**
+  ```powershell
+  dotnet run --project server/src/VncServer.App -- --port 5901 --upnp
+  ```
+- **Cleanup:** On server shutdown, the port mapping is automatically released.
+
+---
+
+## 4. WAN Deployment via Manual Router Port Forwarding
+
+If your router does not support UPnP or has UPnP disabled:
 
 1. **Access Router Management Interface:**
    - Navigate to default gateway (e.g., `192.168.1.1`).
@@ -37,8 +63,8 @@ If the server host has a public IPv4 address (non-CGNAT):
 3. **Dynamic DNS (DDNS):**
    - Configure a DDNS hostname (e.g., via DuckDNS, No-IP, or Cloudflare) to track dynamic public IP changes.
 4. **Security Notice:**
-   - Never expose an unauthenticated server.
-   - Always run with strong HMAC-SHA256 password authentication enabled.
+   - ThanhVNC mandates TLS 1.3 / 1.2 end-to-end encryption and PBKDF2 challenge-response authentication.
+   - Progressive brute-force lockout blocks malicious WAN scanners after 3 failed attempts.
 
 ---
 

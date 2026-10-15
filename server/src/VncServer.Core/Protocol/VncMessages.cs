@@ -48,7 +48,7 @@ public sealed record HandshakeRequest(byte Version, string ClientName);
 
 public sealed record HandshakeResponse(byte Version, byte[] Challenge, int ScreenWidth, int ScreenHeight);
 
-public sealed record AuthRequest(byte[] HmacSignature);
+public sealed record AuthRequest(byte[] HmacSignature, byte[]? ResumeToken = null);
 
 [Flags]
 public enum SessionPermissions : byte
@@ -61,7 +61,7 @@ public enum SessionPermissions : byte
     FullControl = ViewOnly | InputControl | ClipboardSync | FileTransfer
 }
 
-public sealed record AuthResponse(byte StatusCode, byte Permissions = (byte)SessionPermissions.FullControl); // 0 = Success, 1 = InvalidAuth, 2 = ProtocolError
+public sealed record AuthResponse(byte StatusCode, byte Permissions = (byte)SessionPermissions.FullControl, byte[]? SessionToken = null); // 0 = Success, 1 = InvalidAuth, 2 = ProtocolError
 
 public sealed record ScreenFrame(
     uint FrameIndex,

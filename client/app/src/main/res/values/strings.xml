@@ -25,4 +25,6 @@
     <string name="mode_touch">Direct Touch</string>
     <string name="mode_trackpad">Trackpad Mouse</string>
     <string name="confirm_disconnect">Disconnect session?</string>
+    <string name="discovered_servers">Discovered on LAN</string>
+    <string name="discovered_servers_desc">Windows PCs found on your local network</string>
 </resources>

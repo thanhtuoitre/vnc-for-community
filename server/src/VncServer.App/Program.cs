@@ -18,6 +18,9 @@ Console.WriteLine("========================================");
 int port = 5901;
 string password = "vncsecret";
 bool useTls = true;
+bool enableDiscovery = true;
+bool enableUpnp = false;
+string? serverName = null;
 
 for (int i = 0; i < args.Length; i++)
 {
@@ -28,6 +31,10 @@ for (int i = 0; i < args.Length; i++)
     else if (args[i] == "--password" && i + 1 < args.Length)
     {
         password = args[i + 1];
+    }
+    else if (args[i] == "--name" && i + 1 < args.Length)
+    {
+        serverName = args[i + 1];
     }
     else if (args[i] == "--autostart")
     {
@@ -42,6 +49,14 @@ for (int i = 0; i < args.Length; i++)
     else if (args[i] == "--no-tls")
     {
         useTls = false;
+    }
+    else if (args[i] == "--no-discovery")
+    {
+        enableDiscovery = false;
+    }
+    else if (args[i] == "--upnp")
+    {
+        enableUpnp = true;
     }
 }
 
@@ -80,7 +95,17 @@ Console.CancelKeyPress += (s, e) =>
     cts.Cancel();
 };
 
-await using var server = new VncServerHost(port, password, 70, logger, capture: null, serverCertificate: cert, useTls: useTls);
+await using var server = new VncServerHost(
+    port,
+    password,
+    70,
+    logger,
+    capture: null,
+    serverCertificate: cert,
+    useTls: useTls,
+    enableDiscovery: enableDiscovery,
+    enableUpnp: enableUpnp,
+    serverName: serverName);
 server.Start();
 
 try

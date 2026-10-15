@@ -22,6 +22,8 @@ import com.google.android.material.snackbar.Snackbar
 import com.thanhvnc.client.R
 import com.thanhvnc.client.databinding.ActivityMainBinding
 import com.thanhvnc.client.databinding.DialogEditServerBinding
+import com.thanhvnc.client.domain.model.DiscoveredServer
+import com.thanhvnc.client.domain.usecase.DiscoverServersUseCase
 import com.thanhvnc.client.model.ServerProfile
 import com.thanhvnc.client.model.ServerProfileRepository
 import com.thanhvnc.client.network.VncClient
@@ -36,6 +38,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val client = VncClient()
+    private val discoverServersUseCase = DiscoverServersUseCase()
     private lateinit var repository: ServerProfileRepository
     private lateinit var adapter: ServerProfileAdapter
 
@@ -59,12 +62,31 @@ class MainActivity : AppCompatActivity() {
         com.thanhvnc.client.core.logging.CrashHandler.install(this)
         com.thanhvnc.client.core.logging.AppLogger.i("MainActivity created, initialized logging & crash handling")
 
+        // Register network listener for smart Wi-Fi/Cellular handover
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+        cm?.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) {
+                com.thanhvnc.client.core.logging.AppLogger.i("Network available: notifying client to reconnect")
+                client.notifyNetworkChanged()
+            }
+        })
+
         repository = ServerProfileRepository(this)
 
         setupRecyclerView()
         setupListeners()
         observeClient()
         refreshServerList()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        discoverServersUseCase.startDiscovery()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        discoverServersUseCase.stopDiscovery()
     }
 
     private fun setupRecyclerView() {
@@ -482,7 +504,7 @@ class MainActivity : AppCompatActivity() {
                         )
                     }
                     is VncConnectionState.Reconnecting -> {
-                        binding.textHudStats.text = "Reconnecting (${state.attempt})..."
+                        binding.textHudStats.text = "Reconnecting (${state.attempt}/${state.maxAttempts})..."
                     }
                     is VncConnectionState.Error -> {
                         resetModifierKeys()
@@ -492,6 +514,12 @@ class MainActivity : AppCompatActivity() {
                             .show()
                     }
                 }
+            }
+        }
+
+        lifecycleScope.launch {
+            discoverServersUseCase.servers.collect { servers ->
+                renderDiscoveredServers(servers)
             }
         }
 
@@ -539,6 +567,45 @@ class MainActivity : AppCompatActivity() {
                     binding.cursorOverlayView.updateCursorShape(bmp, shape.hotspotX, shape.hotspotY)
                 }
             }
+        }
+    }
+
+    private fun renderDiscoveredServers(servers: List<DiscoveredServer>) {
+        if (servers.isEmpty()) {
+            binding.layoutDiscoveredContainer.visibility = View.GONE
+            return
+        }
+        binding.layoutDiscoveredContainer.visibility = View.VISIBLE
+        binding.textDiscoveredBadge.text = "${servers.size} Online"
+        binding.layoutDiscoveredList.removeAllViews()
+
+        for (server in servers) {
+            val card = LayoutInflater.from(this).inflate(R.layout.item_server_profile, binding.layoutDiscoveredList, false)
+            val textName = card.findViewById<TextView>(R.id.textProfileName)
+            val textAddress = card.findViewById<TextView>(R.id.textProfileHost)
+            val textBadge = card.findViewById<TextView>(R.id.textLastSeen)
+            val btnMenu = card.findViewById<View>(R.id.btnProfileMenu)
+            val btnConnect = card.findViewById<View>(R.id.btnConnectProfile)
+
+            textName.text = server.name
+            val tlsStr = if (server.useTls) " • TLS 1.3" else ""
+            textAddress.text = "${server.host}:${server.port}$tlsStr"
+            textBadge.text = "LAN Discovered"
+            btnMenu.visibility = View.GONE
+
+            btnConnect.setOnClickListener {
+                binding.inputHost.setText(server.host)
+                binding.inputPort.setText(server.port.toString())
+                val saved = repository.getAllProfiles().firstOrNull { it.host == server.host && it.port == server.port }
+                if (saved != null) {
+                    activeProfileId = saved.id
+                    connectToServer(saved.host, saved.port, saved.password, saved.useTls, saved.expectedFingerprint)
+                } else {
+                    Snackbar.make(binding.root, "Selected '${server.name}'. Enter password to connect.", Snackbar.LENGTH_SHORT).show()
+                    binding.inputPassword.requestFocus()
+                }
+            }
+            binding.layoutDiscoveredList.addView(card)
         }
     }
 

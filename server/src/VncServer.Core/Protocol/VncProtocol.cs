@@ -99,9 +99,15 @@ public static class VncProtocol
 
     public static byte[] SerializeAuthRequest(AuthRequest req)
     {
-        byte[] buffer = new byte[2 + req.HmacSignature.Length];
+        int resumeLen = req.ResumeToken?.Length ?? 0;
+        byte[] buffer = new byte[2 + req.HmacSignature.Length + (resumeLen > 0 ? 2 + resumeLen : 0)];
         BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(0, 2), (ushort)req.HmacSignature.Length);
         req.HmacSignature.CopyTo(buffer.AsSpan(2));
+        if (resumeLen > 0)
+        {
+            BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(2 + req.HmacSignature.Length, 2), (ushort)resumeLen);
+            req.ResumeToken!.CopyTo(buffer.AsSpan(4 + req.HmacSignature.Length));
+        }
         return buffer;
     }
 
@@ -115,17 +121,46 @@ public static class VncProtocol
             throw new FormatException("Auth signature truncated");
 
         byte[] sig = payload.Slice(2, sigLen).ToArray();
-        return new AuthRequest(sig);
+        byte[]? resumeToken = null;
+        if (payload.Length >= 2 + sigLen + 2)
+        {
+            ushort tokenLen = BinaryPrimitives.ReadUInt16LittleEndian(payload.Slice(2 + sigLen, 2));
+            if (payload.Length >= 2 + sigLen + 2 + tokenLen && tokenLen > 0)
+            {
+                resumeToken = payload.Slice(2 + sigLen + 2, tokenLen).ToArray();
+            }
+        }
+        return new AuthRequest(sig, resumeToken);
     }
 
-    public static byte[] SerializeAuthResponse(AuthResponse res) => [res.StatusCode, res.Permissions];
+    public static byte[] SerializeAuthResponse(AuthResponse res)
+    {
+        if (res.SessionToken == null || res.SessionToken.Length == 0)
+            return [res.StatusCode, res.Permissions];
+
+        byte[] buffer = new byte[2 + 2 + res.SessionToken.Length];
+        buffer[0] = res.StatusCode;
+        buffer[1] = res.Permissions;
+        BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(2, 2), (ushort)res.SessionToken.Length);
+        res.SessionToken.CopyTo(buffer.AsSpan(4));
+        return buffer;
+    }
 
     public static AuthResponse DeserializeAuthResponse(ReadOnlySpan<byte> payload)
     {
         if (payload.IsEmpty)
             throw new FormatException("Auth response payload empty");
         byte permissions = payload.Length >= 2 ? payload[1] : (byte)SessionPermissions.FullControl;
-        return new AuthResponse(payload[0], permissions);
+        byte[]? sessionToken = null;
+        if (payload.Length >= 4)
+        {
+            ushort tokenLen = BinaryPrimitives.ReadUInt16LittleEndian(payload.Slice(2, 2));
+            if (payload.Length >= 4 + tokenLen && tokenLen > 0)
+            {
+                sessionToken = payload.Slice(4, tokenLen).ToArray();
+            }
+        }
+        return new AuthResponse(payload[0], permissions, sessionToken);
     }
 
     public static byte[] SerializeScreenFrame(ScreenFrame frame)

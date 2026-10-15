@@ -51,8 +51,8 @@ data class HandshakeResponse(
     val screenHeight: Int
 )
 
-data class AuthRequest(val hmacSignature: ByteArray)
-
+data class AuthRequest(val hmacSignature: ByteArray, val resumeToken: ByteArray? = null)
+ 
 object SessionPermissions {
     const val NONE: Byte = 0
     const val VIEW_ONLY: Byte = 1
@@ -62,7 +62,11 @@ object SessionPermissions {
     const val FULL_CONTROL: Byte = 15 // VIEW_ONLY | INPUT_CONTROL | CLIPBOARD_SYNC | FILE_TRANSFER
 }
 
-data class AuthResponse(val statusCode: Byte, val permissions: Byte = SessionPermissions.FULL_CONTROL) // 0 = Success, 1 = InvalidAuth, 2 = ProtocolError
+data class AuthResponse(
+    val statusCode: Byte,
+    val permissions: Byte = SessionPermissions.FULL_CONTROL,
+    val sessionToken: ByteArray? = null
+) // 0 = Success, 1 = InvalidAuth, 2 = ProtocolError
 
 data class ScreenFrame(
     val frameIndex: Long,

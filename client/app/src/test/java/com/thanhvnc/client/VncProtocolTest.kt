@@ -65,6 +65,34 @@ class VncProtocolTest {
     }
 
     @Test
+    fun testAuthWithResumeTokenRoundtrip() {
+        val sig = ByteArray(32) { 0 }
+        val resumeToken = ByteArray(16) { (it * 3).toByte() }
+        val req = AuthRequest(sig, resumeToken)
+        val serialized = VncProtocol.serializeAuthRequest(req)
+        assertTrue(serialized.size >= 52) // 2 + 32 + 2 + 16
+
+        val deserialized = VncProtocol.deserializeAuthRequest(serialized)
+        assertArrayEquals(sig, deserialized.hmacSignature)
+        assertNotNull(deserialized.resumeToken)
+        assertArrayEquals(resumeToken, deserialized.resumeToken)
+    }
+
+    @Test
+    fun testAuthResponseWithSessionTokenRoundtrip() {
+        val sessionToken = ByteArray(16) { (it + 5).toByte() }
+        val res = AuthResponse(statusCode = 0, permissions = SessionPermissions.FULL_CONTROL, sessionToken = sessionToken)
+        val serialized = VncProtocol.serializeAuthResponse(res)
+        assertTrue(serialized.size >= 20) // 1 + 1 + 2 + 16
+
+        val deserialized = VncProtocol.deserializeAuthResponse(serialized)
+        assertEquals(0.toByte(), deserialized.statusCode)
+        assertEquals(SessionPermissions.FULL_CONTROL, deserialized.permissions)
+        assertNotNull(deserialized.sessionToken)
+        assertArrayEquals(sessionToken, deserialized.sessionToken)
+    }
+
+    @Test
     fun testScreenFrameDeserialization() {
         val dummyData = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xD9.toByte())
         val metaLen = 29

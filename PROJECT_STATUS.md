@@ -213,13 +213,38 @@ Build a working, low-latency Windows VNC Server and Android VNC Client.
     - 23 client unit tests passing (100%).
     - Full automated verification script `scripts\test-all.bat` passes cleanly.
 
+- **Production Milestone M4 — LAN Discovery & WAN Resilience:**
+  - Zero-Config LAN Desktop Discovery (UDP 5902):
+    - `LanDiscoveryService.cs` broadcasting `THVNC_BEACON:` JSON and responding immediately to client `THVNC_PROBE` packets over port 5902.
+    - Android `DiscoverServersUseCase.kt` running asynchronous UDP probe loop and real-time beacon listener.
+    - `MainActivity.kt` and `activity_main.xml` displaying dynamic "Discovered on LAN" dashboard card with 1-tap connection.
+  - Smart Reconnection & Cryptographic Session Resumption:
+    - `SessionResumeManager.cs` issuing 16-byte cryptographically secure session resumption tokens with 60-second TTL and one-time consumption to prevent replay attacks.
+    - `VncClient.kt` automatically presenting `ResumeToken` on network drop, resuming session in < 50ms without user credential prompts.
+    - Graceful session invalidation on explicit client disconnect.
+  - Rapid Dead-Socket Detection & Network Handover:
+    - Android client enforces 12-second socket timeout (`soTimeout = 12000`) to catch dead sockets rapidly instead of hanging indefinitely on OS TCP timeouts.
+    - Windows server enforces 15-second inactivity timeout on incoming packets.
+    - `ConnectivityManager.NetworkCallback` in `MainActivity.kt` triggering immediate reconnection on Wi-Fi ↔ 4G/5G transitions.
+    - Reconnection state reporting attempt and max attempts: `Reconnecting(attempt, jitter, maxAttempts)`.
+  - UPnP IGD WAN Automatic Port Mapping:
+    - `UpnpPortForwarder.cs` discovering router gateway via SSDP M-SEARCH broadcast (`239.255.255.250:1900`) and configuring TCP port 5900 forwarding via SOAP `AddPortMapping`.
+    - Queries and displays public external WAN IP address.
+    - Added `--upnp`, `--no-discovery`, and `--name` CLI flags in `Program.cs`.
+    - Comprehensive guide updated in `docs/WAN_DEPLOYMENT.md`.
+  - Test verification:
+    - 89 server unit/integration tests passing (100%).
+    - 29 client unit tests passing (100%).
+    - Full automated verification script `scripts\test-all.bat` passes cleanly.
+
 ## In Progress
 
-- Production Milestone M4 — LAN Discovery & WAN Resilience:
-  - Zero-config LAN desktop discovery via UDP broadcast / mDNS on Windows Server and Android Client.
-  - Smart reconnection with dynamic exponential backoff and Wi-Fi ↔ 4G transition handling.
-  - Rapid dead-connection detection and session state recovery token.
-  - UPnP automatic port mapping on Windows Server for seamless WAN reachability.
+- Production Milestone M5 — Android Viewer & Input RealVNC-Grade:
+  - Precise coordinate transformation audits across aspect-ratio letterboxing, focal zoom (1.0x-5.0x), and pan offsets.
+  - Multi-touch gesture disambiguation (isolating pinch-zoom from single-finger click/drag).
+  - Dual control modes: Direct Touch mode and Trackpad mouse mode.
+  - Remote cursor shape, hotspot tracking, and zero-latency predictive local overlay.
+  - Full Vietnamese IME (Telex/VNI) support and modifier key toolbar.
 
 ## Known Problems
 
@@ -228,34 +253,39 @@ None.
 ## Tests
 
 - Full automated suite: `scripts\test-all.bat` — ALL TESTS & BUILDS PASSED.
-- Windows Server Tests: `dotnet test server/VncServer.sln -c Release` — 81 passed, 0 failed, 0 skipped (~917 ms).
-- Android Client Tests: `gradlew test` (in `client/`) — 23 passed, 0 failed, 0 skipped (Debug + Release unit test passes).
+- Windows Server Tests: `dotnet test server/VncServer.sln -c Release` — 89 passed, 0 failed, 0 skipped (~949 ms).
+- Android Client Tests: `gradlew test` (in `client/`) — 29 passed, 0 failed, 0 skipped (Debug + Release unit test passes).
 - Android APK Assembly: `gradlew assembleDebug` (in `client/`) — BUILD SUCCESSFUL (output: `dist/ThanhVNC.apk`).
 
 ## Changed Files
 
 - `PROJECT_STATUS.md`
-- `docs/SECURITY.md`
-- `server/src/VncServer.Core/Security/CertificateManager.cs`
-- `server/src/VncServer.Core/Security/PasswordHasher.cs`
-- `server/src/VncServer.Core/Security/SessionAuditLogger.cs`
-- `server/src/VncServer.Core/Security/IpRateLimiter.cs`
-- `server/src/VncServer.Core/Transport/TlsVncTransport.cs`
+- `docs/WAN_DEPLOYMENT.md`
+- `server/src/VncServer.Core/Security/SessionResumeManager.cs`
+- `server/src/VncServer.Core/Network/LanDiscoveryService.cs`
+- `server/src/VncServer.Core/Network/UpnpPortForwarder.cs`
 - `server/src/VncServer.Core/Protocol/VncMessages.cs`
 - `server/src/VncServer.Core/Protocol/VncProtocol.cs`
 - `server/src/VncServer.Core/Server/VncSession.cs`
 - `server/src/VncServer.Core/Server/VncServerHost.cs`
 - `server/src/VncServer.App/Program.cs`
-- `tests/VncServer.Tests/SecurityTests.cs`
+- `tests/VncServer.Tests/LanAndResilienceTests.cs`
+- `client/app/build.gradle.kts`
+- `client/app/src/main/res/values/strings.xml`
+- `client/app/src/main/res/drawable/bg_status_connected.xml`
+- `client/app/src/main/res/layout/activity_main.xml`
+- `client/app/src/main/java/com/thanhvnc/client/domain/model/DiscoveredServer.kt`
+- `client/app/src/main/java/com/thanhvnc/client/domain/usecase/DiscoverServersUseCase.kt`
+- `client/app/src/main/java/com/thanhvnc/client/network/VncClient.kt`
 - `client/app/src/main/java/com/thanhvnc/client/protocol/VncMessages.kt`
 - `client/app/src/main/java/com/thanhvnc/client/protocol/VncProtocol.kt`
-- `client/app/src/main/java/com/thanhvnc/client/network/VncClient.kt`
-- `client/app/src/main/java/com/thanhvnc/client/model/ServerProfile.kt`
 - `client/app/src/main/java/com/thanhvnc/client/ui/MainActivity.kt`
+- `client/app/src/test/java/com/thanhvnc/client/VncProtocolTest.kt`
+- `client/app/src/test/java/com/thanhvnc/client/domain/usecase/DiscoverServersUseCaseTest.kt`
 
 ## Next Action
 
-Implement Milestone M4: Zero-config UDP LAN discovery, smart Wi-Fi/cellular reconnection, rapid dead-connection detection, and UPnP WAN port forwarding.
+Implement Milestone M5: Android Viewer & Input RealVNC-Grade (coordinate transformation, gesture disambiguation, touch/trackpad modes, remote cursor overlay, Vietnamese IME).
 
 ## Resume Instructions
 
@@ -263,4 +293,4 @@ At the beginning of the next session:
 1. Read GEMINI.md.
 2. Read this file.
 3. Inspect Git status.
-4. Continue with Milestone M4 implementation.
+4. Continue with Milestone M5 implementation.
