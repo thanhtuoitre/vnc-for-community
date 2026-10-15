@@ -553,6 +553,28 @@
                         android:src="@android:drawable/ic_menu_preferences"
                         app:tint="@color/text_primary" />
 
+                    <!-- Quick Session Actions (Power / System Menu) -->
+                    <ImageButton
+                        android:id="@+id/btnQuickActions"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:layout_marginHorizontal="1dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="Quick Actions"
+                        android:src="@android:drawable/ic_lock_power_off"
+                        app:tint="@color/warning_color" />
+
+                    <!-- Screenshot Capture -->
+                    <ImageButton
+                        android:id="@+id/btnCaptureScreenshot"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:layout_marginHorizontal="1dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="Screenshot"
+                        android:src="@android:drawable/ic_menu_camera"
+                        app:tint="@color/text_primary" />
+
                     <!-- Disconnect Button -->
                     <ImageButton
                         android:id="@+id/btnDisconnectSession"

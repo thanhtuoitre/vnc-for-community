@@ -300,5 +300,22 @@ class VncProtocolTest {
             }
         }
     }
+
+    @Test
+    fun testSessionControlRoundtrip() {
+        val original = SessionControl(SessionAction.KEY_COMBO, KeyCombo.WIN_D.code)
+        val serialized = VncProtocol.serializeSessionControl(original)
+        assertEquals(5, serialized.size)
+
+        val deserialized = VncProtocol.deserializeSessionControl(serialized)
+        assertEquals(original.action, deserialized.action)
+        assertEquals(original.parameter, deserialized.parameter)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun testSessionControlShortPayloadThrows() {
+        val shortPayload = byteArrayOf(1, 2)
+        VncProtocol.deserializeSessionControl(shortPayload)
+    }
 }
 

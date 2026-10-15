@@ -290,6 +290,11 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
         outgoingPackets.trySend(Pair(VncMessageType.ClipboardText, VncProtocol.serializeClipboard(clip)))
     }
 
+    fun sendSessionControl(action: SessionAction, parameter: Int = 0) {
+        val ctrl = SessionControl(action, parameter)
+        outgoingPackets.trySend(Pair(VncMessageType.SessionControl, VncProtocol.serializeSessionControl(ctrl)))
+    }
+
     fun setQuality(quality: Byte, targetFps: Byte, preset: StreamingPreset = StreamingPreset.BALANCED) {
         currentQuality = quality
         currentFps = targetFps

@@ -253,6 +253,23 @@ object VncProtocol {
         return CursorShape(width, height, hotspotX, hotspotY, format, data)
     }
 
+    fun serializeSessionControl(ctrl: SessionControl): ByteArray {
+        val buf = ByteBuffer.allocate(5).order(ByteOrder.LITTLE_ENDIAN)
+        buf.put(ctrl.action.code)
+        buf.putInt(ctrl.parameter)
+        return buf.array()
+    }
+
+    fun deserializeSessionControl(payload: ByteArray): SessionControl {
+        require(payload.size >= 5) { "SessionControl payload too short" }
+        val buf = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
+        val actionCode = buf.get()
+        val param = buf.int
+        val action = SessionAction.entries.firstOrNull { it.code == actionCode }
+            ?: throw IllegalArgumentException("Unknown SessionAction code: $actionCode")
+        return SessionControl(action, param)
+    }
+
     fun readExactly(stream: InputStream, buffer: ByteArray, length: Int) {
         var offset = 0
         while (offset < length) {

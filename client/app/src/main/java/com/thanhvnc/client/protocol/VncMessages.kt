@@ -14,7 +14,8 @@ enum class VncMessageType(val value: Byte) {
     ClipboardText(11),
     AudioFrame(12),
     CursorPosition(13),
-    CursorShape(14);
+    CursorShape(14),
+    SessionControl(15);
 
     companion object {
         private val map = entries.associateBy { it.value }
@@ -127,4 +128,27 @@ data class CursorShape(
     val hotspotY: Int,
     val format: Byte,
     val data: ByteArray
+)
+
+enum class SessionAction(val code: Byte) {
+    LOCK(1),
+    LOG_OFF(2),
+    REBOOT(3),
+    SHUTDOWN(4),
+    KEY_COMBO(5),
+    SWITCH_MONITOR(6)
+}
+
+enum class KeyCombo(val code: Int) {
+    CTRL_ALT_DEL(1),
+    WIN_D(2),
+    WIN_X(3),
+    ALT_TAB(4),
+    CTRL_ESC(5),
+    CTRL_SHIFT_ESC(6)
+}
+
+data class SessionControl(
+    val action: SessionAction,
+    val parameter: Int = 0
 )

@@ -30,8 +30,19 @@ import com.thanhvnc.client.network.VncClient
 import com.thanhvnc.client.network.VncConnectionState
 import com.thanhvnc.client.protocol.KeyFlags
 import com.thanhvnc.client.protocol.KeyboardInput
+import android.content.ContentValues
+import android.graphics.Bitmap
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
+import com.thanhvnc.client.protocol.KeyCombo
+import com.thanhvnc.client.protocol.SessionAction
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
@@ -220,6 +231,14 @@ class MainActivity : AppCompatActivity() {
                 .show()
         }
 
+        binding.btnQuickActions.setOnClickListener { view ->
+            showQuickActionsMenu(view)
+        }
+
+        binding.btnCaptureScreenshot.setOnClickListener {
+            captureAndSaveScreenshot()
+        }
+
         binding.btnCollapseHud.setOnClickListener {
             binding.overlayControlBar.visibility = View.GONE
             binding.btnExpandHudTrigger.visibility = View.VISIBLE
@@ -395,6 +414,115 @@ class MainActivity : AppCompatActivity() {
             }
         }
         popup.show()
+    }
+
+    private fun showQuickActionsMenu(anchor: View) {
+        val popup = PopupMenu(this, anchor)
+        popup.menu.add(0, 1, 0, "Lock Workstation (Win+L)")
+        popup.menu.add(0, 2, 1, "Show Desktop (Win+D)")
+        popup.menu.add(0, 3, 2, "Power Menu (Win+X)")
+        popup.menu.add(0, 4, 3, "Switch Task (Alt+Tab)")
+        popup.menu.add(0, 5, 4, "Task Manager (Ctrl+Shift+Esc)")
+        popup.menu.add(0, 6, 5, "Reboot Windows...")
+        popup.menu.add(0, 7, 6, "Shutdown Windows...")
+
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                1 -> {
+                    client.sendSessionControl(SessionAction.LOCK)
+                    Toast.makeText(this, "Lock Workstation sent", Toast.LENGTH_SHORT).show()
+                    true
+                }
+                2 -> {
+                    client.sendSessionControl(SessionAction.KEY_COMBO, KeyCombo.WIN_D.code)
+                    true
+                }
+                3 -> {
+                    client.sendSessionControl(SessionAction.KEY_COMBO, KeyCombo.WIN_X.code)
+                    true
+                }
+                4 -> {
+                    client.sendSessionControl(SessionAction.KEY_COMBO, KeyCombo.ALT_TAB.code)
+                    true
+                }
+                5 -> {
+                    client.sendSessionControl(SessionAction.KEY_COMBO, KeyCombo.CTRL_SHIFT_ESC.code)
+                    true
+                }
+                6 -> {
+                    MaterialAlertDialogBuilder(this)
+                        .setTitle("Reboot Remote Desktop?")
+                        .setMessage("Are you sure you want to reboot the remote computer? This will terminate the active session.")
+                        .setNegativeButton(R.string.cancel, null)
+                        .setPositiveButton("Reboot") { _, _ ->
+                            client.sendSessionControl(SessionAction.REBOOT)
+                            Toast.makeText(this, "Reboot command sent to remote desktop", Toast.LENGTH_SHORT).show()
+                        }
+                        .show()
+                    true
+                }
+                7 -> {
+                    MaterialAlertDialogBuilder(this)
+                        .setTitle("Shutdown Remote Desktop?")
+                        .setMessage("Are you sure you want to turn off the remote computer? You will not be able to reconnect until it is powered on.")
+                        .setNegativeButton(R.string.cancel, null)
+                        .setPositiveButton("Shutdown") { _, _ ->
+                            client.sendSessionControl(SessionAction.SHUTDOWN)
+                            Toast.makeText(this, "Shutdown command sent to remote desktop", Toast.LENGTH_SHORT).show()
+                        }
+                        .show()
+                    true
+                }
+                else -> false
+            }
+        }
+        popup.show()
+    }
+
+    private fun captureAndSaveScreenshot() {
+        val bitmap = binding.vncSurfaceView.captureScreenshot()
+        if (bitmap == null) {
+            Toast.makeText(this, "No frame available to capture", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                val filename = "ThanhVNC_$timestamp.png"
+
+                val resolver = applicationContext.contentResolver
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/ThanhVNC")
+                        put(MediaStore.MediaColumns.IS_PENDING, 1)
+                    }
+                }
+
+                val imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                if (imageUri != null) {
+                    resolver.openOutputStream(imageUri)?.use { out ->
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        contentValues.clear()
+                        contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                        resolver.update(imageUri, contentValues, null, null)
+                    }
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@MainActivity, "Screenshot saved to Pictures/ThanhVNC", Toast.LENGTH_LONG).show()
+                    }
+                }
+            } catch (ex: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, "Failed to save screenshot: ${ex.message}", Toast.LENGTH_SHORT).show()
+                }
+            } finally {
+                bitmap.recycle()
+            }
+        }
     }
 
     private fun connectToServer(

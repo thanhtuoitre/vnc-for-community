@@ -72,6 +72,19 @@ class VncSurfaceView @JvmOverloads constructor(
     private var twoFingerIsScroll = false
     var onThreeFingerTap: (() -> Unit)? = null
 
+    private val frameLock = Any()
+    @Volatile
+    private var activeFramebuffer: Bitmap? = null
+
+    fun captureScreenshot(): Bitmap? {
+        synchronized(frameLock) {
+            val src = activeFramebuffer ?: return null
+            return if (!src.isRecycled) {
+                src.copy(src.config ?: Bitmap.Config.ARGB_8888, false)
+            } else null
+        }
+    }
+
     private val scaleDetector: ScaleGestureDetector
     private val gestureDetector: GestureDetector
 
@@ -453,6 +466,9 @@ class VncSurfaceView @JvmOverloads constructor(
                     // Composite dirty tile or full frame onto framebuffer
                     if (framebufferCanvas != null) {
                         framebufferCanvas.drawBitmap(tileBitmap, frame.x.toFloat(), frame.y.toFloat(), null)
+                        synchronized(frameLock) {
+                            activeFramebuffer = framebufferBitmap
+                        }
                     }
 
                     var canvas: Canvas? = null
@@ -488,6 +504,9 @@ class VncSurfaceView @JvmOverloads constructor(
                     break
                 }
             }
+        }
+        synchronized(frameLock) {
+            activeFramebuffer = null
         }
         framebufferBitmap?.recycle()
     }

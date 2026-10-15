@@ -17,7 +17,8 @@ public enum VncMessageType : byte
     ClipboardText = 11,
     AudioFrame = 12,
     CursorPosition = 13,
-    CursorShape = 14
+    CursorShape = 14,
+    SessionControl = 15
 }
 
 [Flags]
@@ -97,3 +98,25 @@ public sealed record AudioFrame(uint TimestampMs, ushort SampleRate, byte Channe
 public sealed record CursorPosition(int X, int Y, bool Visible);
 
 public sealed record CursorShape(int Width, int Height, int HotspotX, int HotspotY, byte Format, byte[] Data);
+
+public enum SessionAction : byte
+{
+    Lock = 1,
+    LogOff = 2,
+    Reboot = 3,
+    Shutdown = 4,
+    KeyCombo = 5,
+    SwitchMonitor = 6
+}
+
+public enum KeyCombo : ushort
+{
+    CtrlAltDel = 1,
+    WinD = 2,
+    WinX = 3,
+    AltTab = 4,
+    CtrlEsc = 5,
+    CtrlShiftEsc = 6
+}
+
+public sealed record SessionControl(SessionAction Action, uint Parameter = 0);

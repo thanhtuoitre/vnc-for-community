@@ -1,5 +1,6 @@
 using System.Text;
 using VncServer.Core.Protocol;
+using VncServer.Core.SystemControl;
 
 namespace VncServer.Tests;
 
@@ -222,6 +223,36 @@ public class ProtocolTests
         Assert.Equal(original.HotspotY, deserialized.HotspotY);
         Assert.Equal(original.Format, deserialized.Format);
         Assert.Equal(original.Data, deserialized.Data);
+    }
+
+    [Fact]
+    public void SessionControl_Roundtrip_Succeeds()
+    {
+        var original = new SessionControl(SessionAction.KeyCombo, (uint)KeyCombo.WinD);
+        byte[] serialized = VncProtocol.SerializeSessionControl(original);
+        var deserialized = VncProtocol.DeserializeSessionControl(serialized);
+
+        Assert.Equal(original.Action, deserialized.Action);
+        Assert.Equal(original.Parameter, deserialized.Parameter);
+    }
+
+    [Fact]
+    public void SessionControl_ShortPayload_ThrowsFormatException()
+    {
+        byte[] shortPayload = [0x01, 0x02];
+        Assert.Throws<FormatException>(() => VncProtocol.DeserializeSessionControl(shortPayload));
+    }
+
+    [Fact]
+    public void SessionController_KeyCombos_ExecuteWithoutException()
+    {
+        var winD = new SessionControl(SessionAction.KeyCombo, (uint)KeyCombo.WinD);
+        bool res = SessionController.Execute(winD);
+        Assert.True(res);
+
+        var altTab = new SessionControl(SessionAction.KeyCombo, (uint)KeyCombo.AltTab);
+        bool resAltTab = SessionController.Execute(altTab);
+        Assert.True(resAltTab);
     }
 }
 

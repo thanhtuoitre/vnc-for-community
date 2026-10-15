@@ -366,6 +366,23 @@ public static class VncProtocol
         return new CursorShape(width, height, hotspotX, hotspotY, format, data);
     }
 
+    public static byte[] SerializeSessionControl(SessionControl ctrl)
+    {
+        byte[] buffer = new byte[5];
+        buffer[0] = (byte)ctrl.Action;
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(1, 4), ctrl.Parameter);
+        return buffer;
+    }
+
+    public static SessionControl DeserializeSessionControl(ReadOnlySpan<byte> payload)
+    {
+        if (payload.Length < 5)
+            throw new FormatException("SessionControl payload too short");
+        var action = (SessionAction)payload[0];
+        uint parameter = BinaryPrimitives.ReadUInt32LittleEndian(payload.Slice(1, 4));
+        return new SessionControl(action, parameter);
+    }
+
     public static byte[] GenerateChallenge(int length = 32)
     {
         byte[] challenge = new byte[length];

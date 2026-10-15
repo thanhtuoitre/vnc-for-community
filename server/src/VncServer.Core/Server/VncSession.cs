@@ -252,6 +252,19 @@ public sealed class VncSession : IAsyncDisposable
                     }
                     break;
 
+                case VncMessageType.SessionControl:
+                    if (Permissions.HasFlag(SessionPermissions.InputControl))
+                    {
+                        var sessionCtrl = VncProtocol.DeserializeSessionControl(payload);
+                        SystemControl.SessionController.Execute(sessionCtrl, _logger);
+                        Security.SessionAuditLogger.RecordEvent("SESSION_CONTROL", RemoteEndPoint, $"Action: {sessionCtrl.Action}, Param: {sessionCtrl.Parameter}");
+                    }
+                    else
+                    {
+                        _logger?.Warn($"[{RemoteEndPoint}] SessionControl rejected: client lacks InputControl permission.");
+                    }
+                    break;
+
                 case VncMessageType.Disconnect:
                     _logger?.Info($"[{RemoteEndPoint}] Client requested disconnect.");
                     if (_currentSessionToken != null && _resumeManager != null)
