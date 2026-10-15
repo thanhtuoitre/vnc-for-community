@@ -299,51 +299,44 @@ Build a working, low-latency Windows VNC Server and Android VNC Client.
 
 ## Current State
 
-ALL MILESTONES (M1 through M7) ARE FULLY IMPLEMENTED, VERIFIED, AND PRODUCTION-READY:
+MILESTONES (M1 through M7) & INDEPENDENT QA / SECURITY REVIEW:
 - Milestone M1: Foundations, Clean Architecture & CI — COMPLETED & VERIFIED.
-- Milestone M2: High-Performance DXGI Desktop Duplication & Adaptive Streaming — COMPLETED & VERIFIED.
+- Milestone M2: High-Performance DXGI Desktop Duplication & Adaptive Streaming — COMPLETED (Lưu ý: phát hiện lỗi Major COM Vtable slot 9 vs 7 trên Dual-GPU).
 - Milestone M3: Mandatory TLS 1.3/1.2 Security, TOFU Pinning & PBKDF2 Auth — COMPLETED & VERIFIED.
 - Milestone M4: LAN UDP Discovery & Cryptographic Session Resumption — COMPLETED & VERIFIED.
 - Milestone M5: RealVNC-Grade Touch Gestures, Decoupled Cursor & Vietnamese IME — COMPLETED & VERIFIED.
 - Milestone M6: Advanced Session Control, Remote Screenshots & Wake-on-LAN — COMPLETED & VERIFIED.
 - Milestone M7: Single-File Packaging, Inno Setup, PROTOCOL.md & RealVNC Benchmarks — COMPLETED & VERIFIED.
+- **Milestone QA: Independent QA & Security Review (Groups A–G)** — HOÀN THÀNH. Kết luận: **ĐẠT CÓ ĐIỀU KIỆN**. Báo cáo chi tiết: `docs/QA_REPORT.md`.
 
 ## Tests
 
 - Full automated suite: `scripts\test-all.bat` — ALL TESTS & BUILDS PASSED.
-- Windows Server Tests: `dotnet test server/VncServer.sln -c Release` — 92 passed, 0 failed, 0 skipped (~914 ms).
-- Android Client Tests: `gradlew test` (in `client/`) — 35 passed, 0 failed, 0 skipped (Debug + Release unit test passes).
-- Android APK Assembly: `gradlew assembleDebug` (in `client/`) — BUILD SUCCESSFUL (output: `dist/ThanhVNC.apk`).
+- Windows Server Tests: `dotnet test server/VncServer.sln -c Release` — 104 passed (92 baseline + 12 QA measurement tests), 0 failed, 0 skipped.
+- Android Client Tests: `gradlew test` (in `client/`) — 37 passed, 0 failed, 0 skipped.
+- Android APK Assembly: `gradlew assembleDebug` (in `client/`) — BUILD SUCCESSFUL (output: `dist/ThanhVNC.apk`, 6,925,941 bytes).
+- QA Empirical Benchmarks:
+  - Network Loopback RTT: Min = 0.08 ms, Avg = 0.11 ms, p95 = 0.18 ms.
+  - Connect & Auth Time: 11.92 ms.
+  - GDI Capture & JPEG Encode: 30.76 ms (~32.5 FPS).
+  - Stress Test: 50 consecutive TCP connect/disconnect in 22 ms (0.45 ms/cycle).
+  - Vietnamese IME: 207 compound Unicode chars verified 100% fidelity.
+  - Rate Limiting: 3 failures -> 30s block, 5 failures -> 5m block verified.
+  - Protocol Fuzzing: 1,000 malformed packets handled safely with zero crashes.
 
 ## Changed Files
 
+- `docs/QA_REPORT.md` (Tài liệu báo cáo kiểm thử độc lập toàn diện nhóm A-G)
+- `tests/VncServer.Tests/QaMeasurementTests.cs` (12 bài kiểm thử đo lường hiệu năng và kiểm chứng an ninh thực tế)
+- `tests/VncServer.Tests/VncServer.Tests.csproj` (Bật `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>` phục vụ chẩn đoán COM Direct3D/DXGI)
 - `PROJECT_STATUS.md`
-- `README.md`
-- `docs/PROTOCOL.md`
-- `docs/REALVNC_COMPARISON.md`
-- `packaging/installer.iss`
-- `packaging/install-service.bat`
-- `packaging/uninstall-service.bat`
-- `scripts/build-release.bat`
-- `server/src/VncServer.Core/Protocol/VncMessages.cs`
-- `server/src/VncServer.Core/Protocol/VncProtocol.cs`
-- `server/src/VncServer.Core/Server/VncSession.cs`
-- `server/src/VncServer.Core/SystemControl/SessionController.cs`
-- `tests/VncServer.Tests/ProtocolTests.cs`
-- `client/app/src/main/java/com/thanhvnc/client/protocol/VncMessages.kt`
-- `client/app/src/main/java/com/thanhvnc/client/protocol/VncProtocol.kt`
-- `client/app/src/main/java/com/thanhvnc/client/network/VncClient.kt`
-- `client/app/src/main/java/com/thanhvnc/client/network/WakeOnLan.kt`
-- `client/app/src/main/java/com/thanhvnc/client/ui/MainActivity.kt`
-- `client/app/src/main/java/com/thanhvnc/client/ui/VncSurfaceView.kt`
-- `client/app/src/main/res/layout/activity_main.xml`
-- `client/app/src/test/java/com/thanhvnc/client/VncProtocolTest.kt`
-- `client/app/src/test/java/com/thanhvnc/client/WakeOnLanTest.kt`
 
 ## Next Action
 
-Project complete. Ready for production deployment and release tagging.
+Thực hiện khắc phục Top 10 khuyến nghị trong `docs/QA_REPORT.md`:
+1. [P1] Sửa lỗi COM VTable slot 9 thành slot 7 trong `DxgiDesktopCapture.cs`.
+2. [P2] Bổ sung cơ chế chọn GPU Adapter sở hữu màn hình active thông qua `CreateDXGIFactory1` và `EnumAdapters1` để kích hoạt Direct3D Desktop Duplication trên laptop Optimus (Dual-GPU).
 
 ## Resume Instructions
 
-All milestones M1–M7 completed. See `PROJECT_STATUS.md` and `docs/REALVNC_COMPARISON.md` for final report.
+Đọc `docs/QA_REPORT.md` và `tests/VncServer.Tests/QaMeasurementTests.cs`. Bắt đầu khắc phục lỗi Major [BUG-MAJ-01] trong `server/src/VncServer.Core/Capture/DxgiDesktopCapture.cs`.
