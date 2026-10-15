@@ -220,5 +220,57 @@ class VncProtocolTest {
         assertEquals(original.format, deserialized.format)
         assertArrayEquals(original.data, deserialized.data)
     }
+
+    @Test
+    fun testParseHeaderUnsupportedVersion() {
+        val header = ByteArray(VncProtocol.HEADER_SIZE)
+        val buf = java.nio.ByteBuffer.wrap(header).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        buf.putInt(VncProtocol.MAGIC.toInt())
+        buf.put(99.toByte()) // Unsupported version
+        buf.put(VncMessageType.Heartbeat.value)
+        buf.putInt(8)
+
+        val parsed = VncProtocol.parseHeader(header)
+        assertNull(parsed)
+    }
+
+    @Test
+    fun testParseHeaderNegativePayloadLength() {
+        val header = ByteArray(VncProtocol.HEADER_SIZE)
+        val buf = java.nio.ByteBuffer.wrap(header).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        buf.putInt(VncProtocol.MAGIC.toInt())
+        buf.put(VncProtocol.CURRENT_VERSION)
+        buf.put(VncMessageType.ScreenFrame.value)
+        buf.putInt(-1) // Negative payload length
+
+        val parsed = VncProtocol.parseHeader(header)
+        assertNull(parsed)
+    }
+
+    @Test
+    fun testParseHeaderExcessivePayloadLength() {
+        val header = ByteArray(VncProtocol.HEADER_SIZE)
+        val buf = java.nio.ByteBuffer.wrap(header).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        buf.putInt(VncProtocol.MAGIC.toInt())
+        buf.put(VncProtocol.CURRENT_VERSION)
+        buf.put(VncMessageType.ScreenFrame.value)
+        buf.putInt(32 * 1024 * 1024) // 32MB exceeds 16MB limit
+
+        val parsed = VncProtocol.parseHeader(header)
+        assertNull(parsed)
+    }
+
+    @Test
+    fun testParseHeaderFuzzedBytesRobustness() {
+        val random = java.util.Random(42)
+        val fuzzed = ByteArray(VncProtocol.HEADER_SIZE)
+        for (i in 0 until 500) {
+            random.nextBytes(fuzzed)
+            val parsed = VncProtocol.parseHeader(fuzzed)
+            if (parsed != null) {
+                assertTrue(parsed.second in 0..VncProtocol.MAX_PAYLOAD_SIZE)
+            }
+        }
+    }
 }
 

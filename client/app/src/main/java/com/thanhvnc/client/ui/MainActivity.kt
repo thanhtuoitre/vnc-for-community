@@ -55,6 +55,10 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        com.thanhvnc.client.core.logging.AppLogger.init(this)
+        com.thanhvnc.client.core.logging.CrashHandler.install(this)
+        com.thanhvnc.client.core.logging.AppLogger.i("MainActivity created, initialized logging & crash handling")
+
         repository = ServerProfileRepository(this)
 
         setupRecyclerView()

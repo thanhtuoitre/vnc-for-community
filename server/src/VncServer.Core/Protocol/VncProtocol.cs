@@ -247,7 +247,7 @@ public static class VncProtocol
     public static ClipboardMessage DeserializeClipboard(ReadOnlySpan<byte> payload)
     {
         if (payload.Length > 1024 * 1024)
-            throw new FormatException("Clipboard payload exceeds 1 MB limit");
+            throw new InvalidDataException("Clipboard payload exceeds 1 MB limit");
         return new ClipboardMessage(Encoding.UTF8.GetString(payload));
     }
 

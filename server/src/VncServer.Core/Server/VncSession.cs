@@ -4,23 +4,48 @@ using System.Net.Sockets;
 using System.Threading.Channels;
 using VncServer.Core.Capture;
 using VncServer.Core.Input;
+using VncServer.Core.Logging;
 using VncServer.Core.Protocol;
+using VncServer.Core.Transport;
 
 namespace VncServer.Core.Server;
 
+public enum SessionState
+{
+    Connecting,
+    Handshaking,
+    Authenticating,
+    Connected,
+    Disconnecting,
+    Closed
+}
+
 public sealed class VncSession : IAsyncDisposable
 {
-    // ponytail: VncSession uses TCP with bounded channel drop-oldest; upgrade to QUIC/WebRTC when UDP NAT-traversal is needed.
-    private readonly TcpClient _client;
-    private readonly NetworkStream _stream;
-    private readonly ScreenCapture _capture;
+    private readonly IVncTransport _transport;
+    private readonly IScreenCapture _capture;
     private readonly string _password;
-    private readonly Action<string>? _log;
+    private readonly IVncLogger? _logger;
     private readonly Security.IpRateLimiter? _rateLimiter;
     private readonly CancellationTokenSource _sessionCts = new();
     private readonly SemaphoreSlim _sendLock = new(1, 1);
 
-    public string RemoteEndPoint => _client.Client.RemoteEndPoint?.ToString() ?? "Unknown";
+    public string RemoteEndPoint => _transport.RemoteEndPoint;
+    public SessionState State { get; private set; } = SessionState.Connecting;
+
+    public VncSession(
+        IVncTransport transport,
+        IScreenCapture capture,
+        string password,
+        IVncLogger? logger = null,
+        Security.IpRateLimiter? rateLimiter = null)
+    {
+        _transport = transport;
+        _capture = capture;
+        _password = password;
+        _logger = logger;
+        _rateLimiter = rateLimiter;
+    }
 
     public VncSession(
         TcpClient client,
@@ -28,14 +53,8 @@ public sealed class VncSession : IAsyncDisposable
         string password,
         Action<string>? log = null,
         Security.IpRateLimiter? rateLimiter = null)
+        : this(new TcpVncTransport(client), capture, password, log != null ? new ActionVncLogger(log) : null, rateLimiter)
     {
-        _client = client;
-        _client.NoDelay = true;
-        _stream = client.GetStream();
-        _capture = capture;
-        _password = password;
-        _log = log;
-        _rateLimiter = rateLimiter;
     }
 
     public async Task RunAsync(CancellationToken cancellationToken = default)
@@ -45,13 +64,16 @@ public sealed class VncSession : IAsyncDisposable
 
         try
         {
+            State = SessionState.Handshaking;
             if (!await PerformHandshakeAndAuthAsync(ct).ConfigureAwait(false))
             {
-                _log?.Invoke($"[{RemoteEndPoint}] Authentication failed. Connection terminated.");
+                State = SessionState.Closed;
+                _logger?.Warn($"[{RemoteEndPoint}] Authentication failed. Connection terminated.");
                 return;
             }
 
-            _log?.Invoke($"[{RemoteEndPoint}] Authenticated successfully. Starting stream and input loop.");
+            State = SessionState.Connected;
+            _logger?.Info($"[{RemoteEndPoint}] Authenticated successfully. Starting stream and input loop.");
 
             // Bounded channel with capacity 1 and DropOldest drops stale frames during network congestion
             var frameChannel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(1)
@@ -67,6 +89,7 @@ public sealed class VncSession : IAsyncDisposable
             var cursorTask = ProduceCursorUpdatesAsync(ct);
 
             await Task.WhenAny(readTask, captureTask, sendTask, cursorTask).ConfigureAwait(false);
+            State = SessionState.Disconnecting;
             _sessionCts.Cancel();
             await Task.WhenAll(
                 readTask.ContinueWith(_ => { }, TaskScheduler.Default),
@@ -81,7 +104,11 @@ public sealed class VncSession : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            _log?.Invoke($"[{RemoteEndPoint}] Session error: {ex.Message}");
+            _logger?.Error($"[{RemoteEndPoint}] Session error: {ex.Message}", ex);
+        }
+        finally
+        {
+            State = SessionState.Closed;
         }
     }
 
@@ -92,7 +119,7 @@ public sealed class VncSession : IAsyncDisposable
         if (type != VncMessageType.HandshakeRequest) return false;
 
         var handshakeReq = VncProtocol.DeserializeHandshakeRequest(payload);
-        _log?.Invoke($"[{RemoteEndPoint}] Handshake from '{handshakeReq.ClientName}' (v{handshakeReq.Version})");
+        _logger?.Info($"[{RemoteEndPoint}] Handshake from '{handshakeReq.ClientName}' (v{handshakeReq.Version})");
 
         // 2. Send HandshakeResponse
         byte[] challenge = VncProtocol.GenerateChallenge();
@@ -101,18 +128,19 @@ public sealed class VncSession : IAsyncDisposable
         await SendPacketAsync(VncMessageType.HandshakeResponse, VncProtocol.SerializeHandshakeResponse(handshakeRes), ct).ConfigureAwait(false);
 
         // 3. Read AuthRequest
+        State = SessionState.Authenticating;
         var (authType, authPayload) = await ReadPacketAsync(ct).ConfigureAwait(false);
         if (authType != VncMessageType.AuthRequest) return false;
 
         var authReq = VncProtocol.DeserializeAuthRequest(authPayload);
         bool isValid = VncProtocol.VerifyHmac(challenge, authReq.HmacSignature, _password);
 
-        if (_client.Client.RemoteEndPoint is IPEndPoint ep)
+        if (_transport.RemoteAddress is IPAddress address)
         {
             if (isValid)
-                _rateLimiter?.RecordAuthSuccess(ep.Address);
+                _rateLimiter?.RecordAuthSuccess(address);
             else
-                _rateLimiter?.RecordAuthFailure(ep.Address);
+                _rateLimiter?.RecordAuthFailure(address);
         }
 
         // 4. Send AuthResponse
@@ -148,21 +176,21 @@ public sealed class VncSession : IAsyncDisposable
                     var qc = VncProtocol.DeserializeQualityControl(payload);
                     _capture.SetQuality(qc.Quality);
                     _targetFps = Math.Clamp((int)qc.TargetFps, 5, 60);
-                    _log?.Invoke($"[{RemoteEndPoint}] Adaptive Quality: {qc.Quality}%, FPS: {_targetFps}");
+                    _logger?.Debug($"[{RemoteEndPoint}] Adaptive Quality: {qc.Quality}%, FPS: {_targetFps}");
                     break;
 
                 case VncMessageType.ClipboardText:
                     var clip = VncProtocol.DeserializeClipboard(payload);
                     WindowsClipboard.SetText(clip.Text);
-                    _log?.Invoke($"[{RemoteEndPoint}] Remote clipboard updated ({clip.Text.Length} chars).");
+                    _logger?.Info($"[{RemoteEndPoint}] Remote clipboard updated ({clip.Text.Length} chars).");
                     break;
 
                 case VncMessageType.Disconnect:
-                    _log?.Invoke($"[{RemoteEndPoint}] Client requested disconnect.");
+                    _logger?.Info($"[{RemoteEndPoint}] Client requested disconnect.");
                     return;
 
                 default:
-                    _log?.Invoke($"[{RemoteEndPoint}] Unexpected message type: {type}");
+                    _logger?.Warn($"[{RemoteEndPoint}] Unexpected message type: {type}");
                     break;
             }
         }
@@ -206,7 +234,7 @@ public sealed class VncSession : IAsyncDisposable
     private async Task<(VncMessageType Type, byte[] Payload)> ReadPacketAsync(CancellationToken ct)
     {
         byte[] headerBuffer = new byte[VncProtocol.HeaderSize];
-        await _stream.ReadExactlyAsync(headerBuffer, ct).ConfigureAwait(false);
+        await _transport.ReadExactlyAsync(headerBuffer, ct).ConfigureAwait(false);
 
         if (!VncProtocol.TryReadHeader(headerBuffer, out var type, out int payloadLength))
             throw new InvalidDataException("Invalid packet header received");
@@ -214,7 +242,7 @@ public sealed class VncSession : IAsyncDisposable
         byte[] payload = new byte[payloadLength];
         if (payloadLength > 0)
         {
-            await _stream.ReadExactlyAsync(payload, ct).ConfigureAwait(false);
+            await _transport.ReadExactlyAsync(payload, ct).ConfigureAwait(false);
         }
 
         return (type, payload);
@@ -271,12 +299,11 @@ public sealed class VncSession : IAsyncDisposable
             byte[] headerBuffer = new byte[VncProtocol.HeaderSize];
             VncProtocol.WriteHeader(headerBuffer, type, payload.Length);
 
-            await _stream.WriteAsync(headerBuffer, ct).ConfigureAwait(false);
+            await _transport.SendAsync(headerBuffer, ct).ConfigureAwait(false);
             if (payload.Length > 0)
             {
-                await _stream.WriteAsync(payload, ct).ConfigureAwait(false);
+                await _transport.SendAsync(payload, ct).ConfigureAwait(false);
             }
-            await _stream.FlushAsync(ct).ConfigureAwait(false);
         }
         finally
         {
@@ -296,9 +323,6 @@ public sealed class VncSession : IAsyncDisposable
         _sessionCts.Cancel();
         _sessionCts.Dispose();
         _sendLock.Dispose();
-        _stream.Dispose();
-        _client.Dispose();
-        await Task.CompletedTask;
+        await _transport.DisposeAsync().ConfigureAwait(false);
     }
 }
-

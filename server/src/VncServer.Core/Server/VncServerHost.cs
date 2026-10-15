@@ -2,15 +2,16 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using VncServer.Core.Capture;
+using VncServer.Core.Logging;
 
 namespace VncServer.Core.Server;
 
 public sealed class VncServerHost : IAsyncDisposable
 {
     private readonly TcpListener _listener;
-    private readonly ScreenCapture _capture;
+    private readonly IScreenCapture _capture;
     private readonly string _password;
-    private readonly Action<string>? _log;
+    private readonly IVncLogger? _logger;
     private readonly Security.IpRateLimiter _rateLimiter = new();
     private readonly ConcurrentDictionary<VncSession, byte> _sessions = new();
     private readonly CancellationTokenSource _cts = new();
@@ -19,13 +20,18 @@ public sealed class VncServerHost : IAsyncDisposable
     public int Port { get; }
     public bool IsRunning { get; private set; }
 
-    public VncServerHost(int port, string password, int captureQuality = 70, Action<string>? log = null)
+    public VncServerHost(int port, string password, int captureQuality = 70, IVncLogger? logger = null, IScreenCapture? capture = null)
     {
         Port = port;
         _password = password;
-        _log = log;
-        _capture = new ScreenCapture(captureQuality);
+        _logger = logger;
+        _capture = capture ?? new ScreenCapture(captureQuality);
         _listener = new TcpListener(IPAddress.Any, port);
+    }
+
+    public VncServerHost(int port, string password, int captureQuality, Action<string>? log)
+        : this(port, password, captureQuality, log != null ? new ActionVncLogger(log) : null)
+    {
     }
 
     public void Start()
@@ -33,7 +39,7 @@ public sealed class VncServerHost : IAsyncDisposable
         if (IsRunning) return;
         _listener.Start();
         IsRunning = true;
-        _log?.Invoke($"VNC Server listening on port {Port}...");
+        _logger?.Info($"VNC Server listening on port {Port}...");
         _acceptTask = AcceptConnectionsAsync(_cts.Token);
     }
 
@@ -48,17 +54,18 @@ public sealed class VncServerHost : IAsyncDisposable
                 {
                     if (!_rateLimiter.IsConnectionAllowed(ep.Address))
                     {
-                        _log?.Invoke($"Connection rejected from {ep.Address} (throttled / rate limited).");
+                        _logger?.Warn($"Connection rejected from {ep.Address} (throttled / rate limited).");
                         tcpClient.Dispose();
                         continue;
                     }
                     _rateLimiter.RecordConnection(ep.Address);
                 }
 
-                var session = new VncSession(tcpClient, _capture, _password, _log, _rateLimiter);
+                var transport = new Transport.TcpVncTransport(tcpClient);
+                var session = new VncSession(transport, _capture, _password, _logger, _rateLimiter);
                 _sessions.TryAdd(session, 0);
 
-                _log?.Invoke($"Accepted connection from {session.RemoteEndPoint}");
+                _logger?.Info($"Accepted connection from {session.RemoteEndPoint}");
 
                 _ = Task.Run(async () =>
                 {
@@ -70,7 +77,7 @@ public sealed class VncServerHost : IAsyncDisposable
                     {
                         _sessions.TryRemove(session, out _);
                         await session.DisposeAsync().ConfigureAwait(false);
-                        _log?.Invoke($"Closed session with {session.RemoteEndPoint}");
+                        _logger?.Info($"Closed session with {session.RemoteEndPoint}");
                     }
                 }, ct);
             }
@@ -82,7 +89,7 @@ public sealed class VncServerHost : IAsyncDisposable
             {
                 if (!ct.IsCancellationRequested)
                 {
-                    _log?.Invoke($"Accept error: {ex.Message}");
+                    _logger?.Error($"Accept error: {ex.Message}", ex);
                 }
             }
         }
@@ -105,7 +112,7 @@ public sealed class VncServerHost : IAsyncDisposable
             await session.DisposeAsync().ConfigureAwait(false);
         }
         _sessions.Clear();
-        _log?.Invoke("VNC Server stopped.");
+        _logger?.Info("VNC Server stopped.");
     }
 
     public async ValueTask DisposeAsync()

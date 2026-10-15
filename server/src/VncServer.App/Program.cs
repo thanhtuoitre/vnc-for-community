@@ -1,6 +1,15 @@
 using System.Net;
 using System.Net.Sockets;
+using VncServer.Core.Logging;
 using VncServer.Core.Server;
+
+// Initialize structured logging and crash reporting
+string logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ThanhVNC", "logs");
+string logFile = Path.Combine(logDir, "vnc-server.log");
+var consoleLogger = new ConsoleVncLogger();
+var fileLogger = new FileVncLogger(logFile);
+var logger = new CompositeVncLogger(consoleLogger, fileLogger);
+CrashReporter.Initialize(Path.Combine(logDir, "..", "crashes"), logger);
 
 Console.WriteLine("========================================");
 Console.WriteLine("        VNC Remote Desktop Server       ");
@@ -21,9 +30,9 @@ for (int i = 0; i < args.Length; i++)
     }
 }
 
-Console.WriteLine($"Server Port: {port}");
-Console.WriteLine($"Password:    {password}");
-Console.WriteLine("Local IPv4 Addresses:");
+logger.Info($"Server Port: {port}");
+logger.Info($"Log File:    {logFile}");
+logger.Info("Local IPv4 Addresses:");
 
 try
 {
@@ -32,13 +41,13 @@ try
     {
         if (ip.AddressFamily == AddressFamily.InterNetwork)
         {
-            Console.WriteLine($"  - {ip}:{port}");
+            logger.Info($"  - {ip}:{port}");
         }
     }
 }
 catch
 {
-    Console.WriteLine($"  - 127.0.0.1:{port}");
+    logger.Info($"  - 127.0.0.1:{port}");
 }
 
 Console.WriteLine();
@@ -51,7 +60,7 @@ Console.CancelKeyPress += (s, e) =>
     cts.Cancel();
 };
 
-await using var server = new VncServerHost(port, password, 70, Console.WriteLine);
+await using var server = new VncServerHost(port, password, 70, logger);
 server.Start();
 
 try

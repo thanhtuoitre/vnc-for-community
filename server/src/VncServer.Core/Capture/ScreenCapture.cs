@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 
 namespace VncServer.Core.Capture;
 
-public sealed class ScreenCapture : IDisposable
+public sealed class ScreenCapture : IScreenCapture
 {
     // ponytail: ScreenCapture uses GDI CopyFromScreen + GDI+ JPEG; upgrade to DXGI Desktop Duplication + NVENC when 120fps/multi-monitor HDR is required.
     private const int SmCxScreen = 0;
