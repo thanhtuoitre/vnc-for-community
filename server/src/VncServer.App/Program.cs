@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using VncServer.Core.Logging;
 using VncServer.Core.Server;
@@ -67,22 +68,52 @@ logger.Info($"Server Port: {port}");
 logger.Info($"TLS Enabled: {useTls}");
 logger.Info($"Certificate: {fingerprint}");
 logger.Info($"Log File:    {logFile}");
-logger.Info("Local IPv4 Addresses:");
+logger.Info("Available Local IPv4 Endpoints for Android Client:");
+bool foundIp = false;
 
 try
 {
-    var host = Dns.GetHostEntry(Dns.GetHostName());
-    foreach (var ip in host.AddressList)
+    foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
     {
-        if (ip.AddressFamily == AddressFamily.InterNetwork)
+        if (ni.OperationalStatus != OperationalStatus.Up || 
+            ni.NetworkInterfaceType == NetworkInterfaceType.Loopback)
         {
-            logger.Info($"  - {ip}:{port}");
+            continue;
+        }
+
+        var ipProps = ni.GetIPProperties();
+        foreach (var unicast in ipProps.UnicastAddresses)
+        {
+            if (unicast.Address.AddressFamily == AddressFamily.InterNetwork)
+            {
+                logger.Info($"  - [{ni.Name}] {unicast.Address}:{port}");
+                foundIp = true;
+            }
         }
     }
 }
-catch
+catch { }
+
+if (!foundIp)
 {
-    logger.Info($"  - 127.0.0.1:{port}");
+    try
+    {
+        var host = Dns.GetHostEntry(Dns.GetHostName());
+        foreach (var ip in host.AddressList)
+        {
+            if (ip.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(ip))
+            {
+                logger.Info($"  - {ip}:{port}");
+                foundIp = true;
+            }
+        }
+    }
+    catch { }
+}
+
+if (!foundIp)
+{
+    logger.Info($"  - 127.0.0.1:{port} (Loopback only)");
 }
 
 Console.WriteLine();

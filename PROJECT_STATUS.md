@@ -314,31 +314,28 @@ MILESTONES (M1 through M7) & BUG FIXES:
   - Tự động enumerate Adapters qua `CreateDXGIFactory1` + `EnumAdapters1` và gắn `DesktopHelper.AttachToInputDesktop()`.
   - **Bằng chứng thực tế:** `HybridScreenCapture.IsUsingDxgi` chuyển từ `False` sang `True`. Tốc độ capture tăng từ 30.76 ms (~32.5 FPS) lên 13.39 ms (~71.8 FPS) trên màn hình 1920x1080.
   - Bổ sung regression test: `DxgiDesktopCapture_Direct3D11Duplication_InitializesAndCapturesHardwareFrame` (PASS).
+- **Milestone Fix (Minor): [BUG-MIN-01] & [BUG-MIN-02] UI Keyboard & Server LAN IP Listing** — HOÀN THÀNH & ĐÃ KIỂM CHỨNG:
+  - `[BUG-MIN-01]`: Thay thế API deprecated `imm.toggleSoftInput` bằng `WindowCompat.getInsetsController` và `WindowInsetsCompat.Type.ime()` trong `MainActivity.kt`. Build sạch, 37/37 unit tests PASS.
+  - `[BUG-MIN-02]`: Cập nhật `Program.cs` sử dụng `NetworkInterface.GetAllNetworkInterfaces()` để quét và hiển thị toàn bộ endpoint IPv4 khả dụng của các card mạng thật (Wi-Fi, Ethernet) khi khởi động server.
 
 ## Tests
 
 - Full automated suite: `scripts\test-all.bat` — ALL TESTS & BUILDS PASSED.
-- Windows Server Tests: `dotnet test server/VncServer.sln -c Release` — 105 passed (92 baseline + 12 QA tests + 1 regression test), 0 failed, 0 skipped.
+- Windows Server Tests: `dotnet test server/VncServer.sln -c Release` — 105 passed, 0 failed, 0 skipped.
 - Android Client Tests: `gradlew test` (in `client/`) — 37 passed, 0 failed, 0 skipped.
-- Android APK Assembly: `gradlew assembleDebug` (in `client/`) — BUILD SUCCESSFUL (output: `dist/ThanhVNC.apk`, 6,925,941 bytes).
-- Đo lường thực tế sau khi sửa DXGI:
-  - Capture & Encode JPEG Time: 13.39 ms (~71.8 FPS).
-  - Loopback RTT: 0.11 ms.
-  - Connect & Auth Time: 11.92 ms.
+- Android APK Assembly: `gradlew assembleDebug` (in `client/`) — BUILD SUCCESSFUL (output: `dist/ThanhVNC.apk`, 6,021,063 bytes).
 
 ## Changed Files
 
-- `server/src/VncServer.Core/Capture/DxgiDesktopCapture.cs` (Sửa VTable slots, GUIDs, Dual-GPU adapter enumeration, AttachToInputDesktop)
-- `tests/VncServer.Tests/DxgiAndStreamingTests.cs` (Thêm regression test phần cứng DXGI)
-- `tests/VncServer.Tests/QaMeasurementTests.cs` (Cập nhật GUID chuẩn và kiểm tra thực tế)
+- `client/app/src/main/java/com/thanhvnc/client/ui/MainActivity.kt` (Sửa toggleSoftKeyboard dùng WindowInsetsControllerCompat)
+- `server/src/VncServer.App/Program.cs` (Liệt kê IP LAN từ NetworkInterface)
+- `dist/ThanhVNC.apk` (APK mới nhất)
 - `PROJECT_STATUS.md`
 
 ## Next Action
 
-Tiếp tục khắc phục các lỗi Minor trong `docs/QA_REPORT.md`:
-1. [BUG-MIN-01] Cập nhật Soft Keyboard API trên Android trong `MainActivity.kt` sang `WindowInsetsControllerCompat`.
-2. [BUG-MIN-02] In danh sách IP LAN khả dụng khi Server khởi động trong `Program.cs`.
+Toàn bộ lỗi Blocker, Major và Minor trong `docs/QA_REPORT.md` đã được khắc phục và kiểm chứng thực tế. Dự án ở trạng thái ổn định và sẵn sàng bàn giao.
 
 ## Resume Instructions
 
-Tiến hành sửa các lỗi Minor [BUG-MIN-01] và [BUG-MIN-02].
+Xem `PROJECT_STATUS.md` và `docs/QA_REPORT.md`. Mọi mục ưu tiên kỹ thuật đã hoàn thành.

@@ -12,6 +12,7 @@ import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -156,9 +157,7 @@ class MainActivity : AppCompatActivity() {
 
         // Three-finger tap gesture: toggle soft keyboard
         binding.vncSurfaceView.onThreeFingerTap = {
-            binding.vncSurfaceView.requestFocus()
-            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-            imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0)
+            toggleSoftKeyboard()
         }
 
         // Cancel connection button
@@ -168,9 +167,7 @@ class MainActivity : AppCompatActivity() {
 
         // Floating HUD actions
         binding.btnToggleKeyboard.setOnClickListener {
-            binding.vncSurfaceView.requestFocus()
-            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-            imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0)
+            toggleSoftKeyboard()
         }
 
         binding.btnSyncClipboard.setOnClickListener {
@@ -860,6 +857,18 @@ class MainActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_SHIFT_RIGHT -> 0x10
             KeyEvent.KEYCODE_WINDOW -> 0x5B
             else -> 0
+        }
+    }
+
+    private fun toggleSoftKeyboard() {
+        binding.vncSurfaceView.requestFocus()
+        val controller = WindowCompat.getInsetsController(window, binding.vncSurfaceView)
+        val insets = ViewCompat.getRootWindowInsets(window.decorView)
+        val isImeVisible = insets?.isVisible(WindowInsetsCompat.Type.ime()) == true
+        if (isImeVisible) {
+            controller.hide(WindowInsetsCompat.Type.ime())
+        } else {
+            controller.show(WindowInsetsCompat.Type.ime())
         }
     }
 
