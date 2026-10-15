@@ -66,7 +66,11 @@ class VncSurfaceView @JvmOverloads constructor(
     private var lastTouchY = 0f
     private var twoFingerStartDistance = 0f
     private var twoFingerLastMidY = 0f
+    private var twoFingerMidX = 0f
+    private var twoFingerDownTime = 0L
+    private var twoFingerMoved = false
     private var twoFingerIsScroll = false
+    var onThreeFingerTap: (() -> Unit)? = null
 
     private val scaleDetector: ScaleGestureDetector
     private val gestureDetector: GestureDetector
@@ -318,10 +322,21 @@ class VncSurfaceView @JvmOverloads constructor(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         scaleDetector.onTouchEvent(event)
 
+        if (event.pointerCount == 3) {
+            if (event.actionMasked == MotionEvent.ACTION_POINTER_UP) {
+                performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                onThreeFingerTap?.invoke()
+            }
+            return true
+        }
+
         if (event.pointerCount == 2 && !isPinching) {
             // Two-finger handling: Pan when zoomed, or Mouse Wheel / Right click
             when (event.actionMasked) {
                 MotionEvent.ACTION_POINTER_DOWN -> {
+                    twoFingerDownTime = SystemClock.uptimeMillis()
+                    twoFingerMoved = false
+                    twoFingerMidX = (event.getX(0) + event.getX(1)) / 2f
                     twoFingerLastMidY = (event.getY(0) + event.getY(1)) / 2f
                     twoFingerStartDistance = abs(event.getY(0) - event.getY(1))
                     twoFingerIsScroll = false
@@ -329,25 +344,41 @@ class VncSurfaceView @JvmOverloads constructor(
                 MotionEvent.ACTION_MOVE -> {
                     val currentMidX = (event.getX(0) + event.getX(1)) / 2f
                     val currentMidY = (event.getY(0) + event.getY(1)) / 2f
+                    twoFingerMidX = currentMidX
                     val deltaY = currentMidY - twoFingerLastMidY
 
-                    if (zoomScale > 1.05f) {
-                        // When zoomed, two-finger drag pans the viewport
-                        panOffsetY += deltaY
-                        clampPan()
-                        notifyViewportChanged()
-                        twoFingerLastMidY = currentMidY
-                    } else if (abs(deltaY) > 12f) {
-                        // When not zoomed, two-finger drag scrolls remote mouse wheel
+                    if (abs(deltaY) > 10f) {
+                        twoFingerMoved = true
+                        if (zoomScale > 1.05f) {
+                            // When zoomed, two-finger drag pans the viewport
+                            panOffsetY += deltaY
+                            clampPan()
+                            notifyViewportChanged()
+                            twoFingerLastMidY = currentMidY
+                        } else {
+                            // When not zoomed, two-finger drag scrolls remote mouse wheel
+                            val (rx, ry) = if (isTrackpadMode) {
+                                Pair(cursorX.toInt(), cursorY.toInt())
+                            } else {
+                                mapToRemote(currentMidX, currentMidY) ?: Pair(remoteWidth / 2, remoteHeight / 2)
+                            }
+                            val wheelDelta = if (deltaY > 0) 120.toShort() else (-120).toShort()
+                            onMouseInput?.invoke(MouseInput(MouseFlags.WHEEL, rx, ry, wheelDelta))
+                            twoFingerLastMidY = currentMidY
+                            twoFingerIsScroll = true
+                        }
+                    }
+                }
+                MotionEvent.ACTION_POINTER_UP -> {
+                    val elapsed = SystemClock.uptimeMillis() - twoFingerDownTime
+                    if (!twoFingerMoved && !twoFingerIsScroll && elapsed < 350) {
+                        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                         val (rx, ry) = if (isTrackpadMode) {
                             Pair(cursorX.toInt(), cursorY.toInt())
                         } else {
-                            mapToRemote(currentMidX, currentMidY) ?: Pair(remoteWidth / 2, remoteHeight / 2)
+                            mapToRemote(twoFingerMidX, twoFingerLastMidY) ?: Pair(cursorX.toInt(), cursorY.toInt())
                         }
-                        val wheelDelta = if (deltaY > 0) 120.toShort() else (-120).toShort()
-                        onMouseInput?.invoke(MouseInput(MouseFlags.WHEEL, rx, ry, wheelDelta))
-                        twoFingerLastMidY = currentMidY
-                        twoFingerIsScroll = true
+                        dispatchClick(rx, ry, isRight = true)
                     }
                 }
             }

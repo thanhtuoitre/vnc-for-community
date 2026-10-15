@@ -143,6 +143,13 @@ class MainActivity : AppCompatActivity() {
             connectToServer(host, port, password)
         }
 
+        // Three-finger tap gesture: toggle soft keyboard
+        binding.vncSurfaceView.onThreeFingerTap = {
+            binding.vncSurfaceView.requestFocus()
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0)
+        }
+
         // Cancel connection button
         binding.btnCancelConnect.setOnClickListener {
             client.disconnect()
@@ -623,10 +630,16 @@ class MainActivity : AppCompatActivity() {
         val controller = WindowInsetsControllerCompat(window, binding.root)
         if (fullscreen) {
             WindowCompat.setDecorFitsSystemWindows(window, false)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                window.attributes.layoutInDisplayCutoutMode =
+                    android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             controller.hide(WindowInsetsCompat.Type.systemBars())
             controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         } else {
             WindowCompat.setDecorFitsSystemWindows(window, true)
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             controller.show(WindowInsetsCompat.Type.systemBars())
         }
     }

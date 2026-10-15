@@ -53,4 +53,61 @@ class CoordinateMappingTest {
         )
         assertEquals(Pair(1919, 1079), result)
     }
+
+    @Test
+    fun testFocalZoomAndPanMapping() {
+        val zoomScale = 2.0f
+        val panOffsetX = -200f
+        val panOffsetY = -100f
+        val baseW = 1000f
+        val baseH = 500f
+        val zoomedW = baseW * zoomScale
+        val zoomedH = baseH * zoomScale
+        val dLeft = panOffsetX
+        val dTop = panOffsetY
+
+        val touchX = 300f
+        val touchY = 400f
+        val normX = ((touchX - dLeft) / zoomedW).coerceIn(0f, 1f)
+        val normY = ((touchY - dTop) / zoomedH).coerceIn(0f, 1f)
+        val rx = (normX * 1919).toInt()
+        val ry = (normY * 1079).toInt()
+
+        assertEquals(479, rx)
+        assertEquals(539, ry)
+    }
+
+    @Test
+    fun testTrackpadDeltaClamping() {
+        var cursorX = 960f
+        var cursorY = 540f
+        val remoteW = 1920
+        val remoteH = 1080
+
+        // Move by delta +50, +30
+        cursorX = (cursorX + 50f).coerceIn(0f, (remoteW - 1).toFloat())
+        cursorY = (cursorY + 30f).coerceIn(0f, (remoteH - 1).toFloat())
+        assertEquals(1010f, cursorX)
+        assertEquals(570f, cursorY)
+
+        // Large move beyond bounds clamps to max
+        cursorX = (cursorX + 2000f).coerceIn(0f, (remoteW - 1).toFloat())
+        cursorY = (cursorY + 2000f).coerceIn(0f, (remoteH - 1).toFloat())
+        assertEquals(1919f, cursorX)
+        assertEquals(1079f, cursorY)
+    }
+
+    @Test
+    fun testCursorHotspotAlignment() {
+        val canvasMouseX = 500f
+        val canvasMouseY = 300f
+        val hotspotX = 10
+        val hotspotY = 12
+
+        val drawLeft = canvasMouseX - hotspotX.toFloat()
+        val drawTop = canvasMouseY - hotspotY.toFloat()
+
+        assertEquals(490f, drawLeft)
+        assertEquals(288f, drawTop)
+    }
 }

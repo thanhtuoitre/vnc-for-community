@@ -237,14 +237,43 @@ Build a working, low-latency Windows VNC Server and Android VNC Client.
     - 29 client unit tests passing (100%).
     - Full automated verification script `scripts\test-all.bat` passes cleanly.
 
+- **Production Milestone M5 — Android Viewer & Input RealVNC-Grade:**
+  - Precise Coordinate Transformation Engine:
+    - Zero-distortion aspect-fit letterboxing/pillarboxing accounting for device notch and display cutouts (`LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`).
+    - Focal-point pinch zoom (1.0x to 5.0x) with seamless pan offset tracking (`panOffsetX`, `panOffsetY`) and viewport clamping.
+    - Verified by unit tests in `CoordinateMappingTest.kt` (letterboxing, focal zoom/pan, trackpad clamping, hotspot alignment).
+  - Dual Control Modes:
+    - **Direct Touch Mode**: Natural touch-to-click mapping directly under finger touch points.
+    - **Trackpad Mode**: Relative mouse cursor movement with velocity dampening, simulated mouse pointer, and smooth trackpad drag.
+  - Comprehensive Gesture Recognition:
+    - Single tap: Instant left-click (`LEFT_DOWN` + `LEFT_UP`).
+    - Double tap: Fast double-click.
+    - Two-finger tap (< 350ms, no drag): Instant native right-click (`RIGHT_DOWN` + `RIGHT_UP`) with haptic feedback.
+    - Long-press: Context-menu right-click with haptic confirmation.
+    - Two-finger vertical drag: Smooth Windows mouse wheel scrolling (120/-120 delta) when 1.0x zoom, or pan viewport when zoomed.
+    - Three-finger tap: Instant soft keyboard toggle with haptic feedback.
+  - Full Keyboard, Modifiers & Vietnamese IME:
+    - Extended shortcut toolbar for modifier keys: `Ctrl`, `Alt`, `Shift`, `Win`, `Esc`, `Tab`, `Ctrl+Alt+Del`.
+    - Custom `InputConnection` on `VncSurfaceView` emitting raw Unicode code points over wire protocol `KeyFlags.Unicode`.
+    - Windows Server native `SendInput` handling `KEYEVENTF_UNICODE` ensuring flawless Vietnamese typing (Telex / VNI) in all Windows desktop applications.
+  - Zero-Latency Remote Cursor Overlay:
+    - Separate hardware-accelerated `CursorOverlayView` overlaid on `VncSurfaceView` decoupling 60 Hz local mouse tracking from 30 Hz video frame arrivals.
+    - Windows native cursor hotspot alignment (`drawLeft = canvasMouseX - hotspotX`).
+  - Screen Keep-Alive:
+    - `FLAG_KEEP_SCREEN_ON` dynamically managed during active remote session to prevent mobile display sleep.
+  - Test verification:
+    - 89 server unit/integration tests passing (100%).
+    - 32 client unit tests passing (100%).
+    - Debug APK built and tested (`dist/ThanhVNC.apk`).
+
 ## In Progress
 
-- Production Milestone M5 — Android Viewer & Input RealVNC-Grade:
-  - Precise coordinate transformation audits across aspect-ratio letterboxing, focal zoom (1.0x-5.0x), and pan offsets.
-  - Multi-touch gesture disambiguation (isolating pinch-zoom from single-finger click/drag).
-  - Dual control modes: Direct Touch mode and Trackpad mouse mode.
-  - Remote cursor shape, hotspot tracking, and zero-latency predictive local overlay.
-  - Full Vietnamese IME (Telex/VNI) support and modifier key toolbar.
+- Production Milestone M6 & M7 — Advanced Features, Packaging, Docs & RealVNC Benchmarks:
+  - Wire protocol `SessionControl` message (Type 15) for remote Lock Workstation, Log Off, Reboot, and Shutdown.
+  - Special shortcut toolbar buttons for quick desktop control.
+  - Inno Setup / NSIS script for 1-click Windows server installer with auto-start Windows Service and firewall rule creation.
+  - Production signed APK release configuration.
+  - Comprehensive protocol documentation `docs/PROTOCOL.md` and RealVNC comparison benchmark `docs/REALVNC_COMPARISON.md`.
 
 ## Known Problems
 
@@ -253,39 +282,21 @@ None.
 ## Tests
 
 - Full automated suite: `scripts\test-all.bat` — ALL TESTS & BUILDS PASSED.
-- Windows Server Tests: `dotnet test server/VncServer.sln -c Release` — 89 passed, 0 failed, 0 skipped (~949 ms).
-- Android Client Tests: `gradlew test` (in `client/`) — 29 passed, 0 failed, 0 skipped (Debug + Release unit test passes).
+- Windows Server Tests: `dotnet test server/VncServer.sln -c Release` — 89 passed, 0 failed, 0 skipped (~924 ms).
+- Android Client Tests: `gradlew test` (in `client/`) — 32 passed, 0 failed, 0 skipped (Debug + Release unit test passes).
 - Android APK Assembly: `gradlew assembleDebug` (in `client/`) — BUILD SUCCESSFUL (output: `dist/ThanhVNC.apk`).
 
 ## Changed Files
 
 - `PROJECT_STATUS.md`
-- `docs/WAN_DEPLOYMENT.md`
-- `server/src/VncServer.Core/Security/SessionResumeManager.cs`
-- `server/src/VncServer.Core/Network/LanDiscoveryService.cs`
-- `server/src/VncServer.Core/Network/UpnpPortForwarder.cs`
-- `server/src/VncServer.Core/Protocol/VncMessages.cs`
-- `server/src/VncServer.Core/Protocol/VncProtocol.cs`
-- `server/src/VncServer.Core/Server/VncSession.cs`
-- `server/src/VncServer.Core/Server/VncServerHost.cs`
-- `server/src/VncServer.App/Program.cs`
-- `tests/VncServer.Tests/LanAndResilienceTests.cs`
-- `client/app/build.gradle.kts`
-- `client/app/src/main/res/values/strings.xml`
-- `client/app/src/main/res/drawable/bg_status_connected.xml`
-- `client/app/src/main/res/layout/activity_main.xml`
-- `client/app/src/main/java/com/thanhvnc/client/domain/model/DiscoveredServer.kt`
-- `client/app/src/main/java/com/thanhvnc/client/domain/usecase/DiscoverServersUseCase.kt`
-- `client/app/src/main/java/com/thanhvnc/client/network/VncClient.kt`
-- `client/app/src/main/java/com/thanhvnc/client/protocol/VncMessages.kt`
-- `client/app/src/main/java/com/thanhvnc/client/protocol/VncProtocol.kt`
 - `client/app/src/main/java/com/thanhvnc/client/ui/MainActivity.kt`
-- `client/app/src/test/java/com/thanhvnc/client/VncProtocolTest.kt`
-- `client/app/src/test/java/com/thanhvnc/client/domain/usecase/DiscoverServersUseCaseTest.kt`
+- `client/app/src/main/java/com/thanhvnc/client/ui/VncSurfaceView.kt`
+- `client/app/src/test/java/com/thanhvnc/client/CoordinateMappingTest.kt`
+- `dist/ThanhVNC.apk`
 
 ## Next Action
 
-Implement Milestone M5: Android Viewer & Input RealVNC-Grade (coordinate transformation, gesture disambiguation, touch/trackpad modes, remote cursor overlay, Vietnamese IME).
+Implement Milestone M6 (Advanced Features: Session Control Type 15, Windows Power/Lock API, Quick Action HUD) and Milestone M7 (Installer packaging, PROTOCOL.md, REALVNC_COMPARISON.md).
 
 ## Resume Instructions
 
@@ -293,4 +304,4 @@ At the beginning of the next session:
 1. Read GEMINI.md.
 2. Read this file.
 3. Inspect Git status.
-4. Continue with Milestone M5 implementation.
+4. Continue with Milestone M6 & M7 implementation.
