@@ -400,14 +400,30 @@ class VncSurfaceView @JvmOverloads constructor(
 
     private fun renderLoop() {
         var lastRenderedIndex = -1L
+        var framebufferBitmap: Bitmap? = null
+        var framebufferCanvas: Canvas? = null
 
         while (isRunning) {
             val frame = latestFrame.get()
             if (frame != null && frame.frameIndex != lastRenderedIndex) {
                 lastRenderedIndex = frame.frameIndex
 
-                val bitmap = BitmapFactory.decodeByteArray(frame.data, 0, frame.data.size)
-                if (bitmap != null) {
+                val tileBitmap = BitmapFactory.decodeByteArray(frame.data, 0, frame.data.size)
+                if (tileBitmap != null) {
+                    if (framebufferBitmap == null || framebufferBitmap.width != remoteWidth || framebufferBitmap.height != remoteHeight) {
+                        framebufferBitmap?.recycle()
+                        if (remoteWidth > 0 && remoteHeight > 0) {
+                            val newBmp = Bitmap.createBitmap(remoteWidth, remoteHeight, Bitmap.Config.ARGB_8888)
+                            framebufferBitmap = newBmp
+                            framebufferCanvas = Canvas(newBmp)
+                        }
+                    }
+
+                    // Composite dirty tile or full frame onto framebuffer
+                    if (framebufferCanvas != null) {
+                        framebufferCanvas.drawBitmap(tileBitmap, frame.x.toFloat(), frame.y.toFloat(), null)
+                    }
+
                     var canvas: Canvas? = null
                     try {
                         canvas = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -424,13 +440,14 @@ class VncSurfaceView @JvmOverloads constructor(
                             canvas.drawRect(0f, 0f, canvas.width.toFloat(), canvas.height.toFloat(), bgPaint)
 
                             // Render scaled & panned remote desktop bitmap
-                            canvas.drawBitmap(bitmap, null, dRect, paint)
+                            val bmpToDraw = framebufferBitmap ?: tileBitmap
+                            canvas.drawBitmap(bmpToDraw, null, dRect, paint)
                         }
                     } finally {
                         if (canvas != null) {
                             holder.unlockCanvasAndPost(canvas)
                         }
-                        bitmap.recycle()
+                        tileBitmap.recycle()
                     }
                 }
             } else {
@@ -441,6 +458,7 @@ class VncSurfaceView @JvmOverloads constructor(
                 }
             }
         }
+        framebufferBitmap?.recycle()
     }
 }
 

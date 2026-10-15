@@ -28,6 +28,16 @@ for (int i = 0; i < args.Length; i++)
     {
         password = args[i + 1];
     }
+    else if (args[i] == "--autostart")
+    {
+        VncServer.Core.Service.WindowsServiceHelper.ConfigureAutoStart(true);
+        logger.Info("Enabled auto-start with Windows.");
+    }
+    else if (args[i] == "--no-autostart")
+    {
+        VncServer.Core.Service.WindowsServiceHelper.ConfigureAutoStart(false);
+        logger.Info("Disabled auto-start with Windows.");
+    }
 }
 
 logger.Info($"Server Port: {port}");

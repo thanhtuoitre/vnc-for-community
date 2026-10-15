@@ -230,13 +230,14 @@ public static class VncProtocol
         return new DisconnectMessage(payload[0]);
     }
 
-    public static byte[] SerializeQualityControl(QualityControl qc) => [qc.Quality, qc.TargetFps];
+    public static byte[] SerializeQualityControl(QualityControl qc) => [qc.Quality, qc.TargetFps, qc.Preset];
 
     public static QualityControl DeserializeQualityControl(ReadOnlySpan<byte> payload)
     {
         if (payload.Length < 2)
             throw new FormatException("QualityControl payload too short");
-        return new QualityControl(payload[0], payload[1]);
+        byte preset = payload.Length >= 3 ? payload[2] : (byte)0;
+        return new QualityControl(payload[0], payload[1], preset);
     }
 
     public static byte[] SerializeClipboard(ClipboardMessage msg)

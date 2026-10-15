@@ -70,7 +70,14 @@ public sealed record Heartbeat(long TimestampMs);
 
 public sealed record DisconnectMessage(byte ReasonCode);
 
-public sealed record QualityControl(byte Quality, byte TargetFps);
+public enum StreamingPreset : byte
+{
+    Balanced = 0,
+    LowLatency = 1,
+    HighQuality = 2
+}
+
+public sealed record QualityControl(byte Quality, byte TargetFps, byte Preset = 0);
 
 public sealed record ClipboardMessage(string Text);
 

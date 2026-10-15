@@ -25,7 +25,7 @@ public sealed class VncServerHost : IAsyncDisposable
         Port = port;
         _password = password;
         _logger = logger;
-        _capture = capture ?? new ScreenCapture(captureQuality);
+        _capture = capture ?? new HybridScreenCapture(captureQuality, logger);
         _listener = new TcpListener(IPAddress.Any, port);
     }
 

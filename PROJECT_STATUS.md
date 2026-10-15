@@ -165,9 +165,32 @@ Build a working, low-latency Windows VNC Server and Android VNC Client.
     - `.github/workflows/ci.yml` building and testing both Windows Server and Android Client on every commit.
     - `scripts/test-all.bat` for one-command local end-to-end verification.
 
+- **Production Milestone M2 — High-Performance Capture & Streaming:**
+  - Direct3D 11 & DXGI Desktop Duplication:
+    - Native `DxgiDesktopCapture.cs` using hardware Direct3D 11 device and `IDXGIOutputDuplication`.
+    - Zero external NuGet bloat: direct native COM vtable function pointer invocations.
+    - Zero CPU on static frames: hardware reports `AccumulatedFrames == 0` without copying textures or encoding frames.
+    - Safe recovery: detects `DXGI_ERROR_ACCESS_LOST` (0x887A0026) upon UAC secure desktop prompts, screen locks, and resolution changes.
+  - Hybrid Capture Controller:
+    - `HybridScreenCapture.cs` prioritizes DXGI Desktop Duplication, seamlessly falling back to GDI `ScreenCapture` on access loss.
+    - Automatic 5-second background recovery timer smoothly switches back to hardware acceleration once the desktop session is restored.
+  - Android Dirty-Rect Tile Compositing:
+    - `VncSurfaceView.kt` maintains a persistent `framebufferBitmap` and `framebufferCanvas`.
+    - Sub-rectangle tiles (`frame.x`, `frame.y`) are drawn directly onto the persistent framebuffer without screen flicker or clearing unaffected regions.
+  - Streaming Presets & Adaptive Negotiation:
+    - `StreamingPreset` (`Balanced`, `LowLatency`, `HighQuality`) integrated into `QualityControl` protocol packet.
+    - End-to-end support across server (`VncSession.cs`) and Android client (`VncClient.kt`).
+  - Windows Auto-Start & Service Foundation:
+    - `WindowsServiceHelper.cs` managing Registry Run keys and active user session token queries (`WTSQueryUserToken`, `WTSGetActiveConsoleSessionId`).
+    - CLI arguments `--autostart` and `--no-autostart` in `Program.cs`.
+  - Test verification:
+    - 76 server unit/integration tests passing (100%).
+    - 23 client unit tests passing (100%).
+    - Full automated verification script `scripts\test-all.bat` passes cleanly.
+
 ## In Progress
 
-- Production Milestone M2 — High-Performance Capture & Streaming (Windows Server DXGI Desktop Duplication engine with GDI fallback, dirty-rect updates, adaptive streaming presets).
+- Production Milestone M3 — Security & End-to-End Encryption (TLS 1.3 encrypted transport with certificate fingerprint pinning, strong PBKDF2 password derivation, progressive lockout, view-only/full-control permissions, session audit logging, and `docs/SECURITY.md`).
 
 ## Known Problems
 
@@ -176,42 +199,30 @@ None.
 ## Tests
 
 - Full automated suite: `scripts\test-all.bat` — ALL TESTS & BUILDS PASSED.
-- Windows Server Tests: `dotnet test server/VncServer.sln -c Release` — 72 passed, 0 failed, 0 skipped (406 ms).
+- Windows Server Tests: `dotnet test server/VncServer.sln -c Release` — 76 passed, 0 failed, 0 skipped (881 ms).
 - Android Client Tests: `gradlew test` (in `client/`) — 23 passed, 0 failed, 0 skipped (Debug + Release unit test passes).
 - Android APK Assembly: `gradlew assembleDebug` (in `client/`) — BUILD SUCCESSFUL (output: `dist/ThanhVNC.apk`).
 
 ## Changed Files
 
 - `PROJECT_STATUS.md`
-- `.github/workflows/ci.yml`
-- `scripts/test-all.bat`
-- `server/src/VncServer.Core/Capture/IScreenCapture.cs`
-- `server/src/VncServer.Core/Capture/ScreenCapture.cs`
-- `server/src/VncServer.Core/Codecs/IFrameEncoder.cs`
-- `server/src/VncServer.Core/Codecs/JpegFrameEncoder.cs`
-- `server/src/VncServer.Core/Transport/IVncTransport.cs`
-- `server/src/VncServer.Core/Transport/TcpVncTransport.cs`
-- `server/src/VncServer.Core/Logging/IVncLogger.cs`
-- `server/src/VncServer.Core/Logging/ConsoleVncLogger.cs`
-- `server/src/VncServer.Core/Logging/FileVncLogger.cs`
-- `server/src/VncServer.Core/Logging/CompositeVncLogger.cs`
-- `server/src/VncServer.Core/Logging/ActionVncLogger.cs`
-- `server/src/VncServer.Core/Logging/CrashReporter.cs`
+- `server/src/VncServer.Core/Capture/DxgiDesktopCapture.cs`
+- `server/src/VncServer.Core/Capture/HybridScreenCapture.cs`
+- `server/src/VncServer.Core/Service/WindowsServiceHelper.cs`
+- `server/src/VncServer.Core/Protocol/VncMessages.cs`
+- `server/src/VncServer.Core/Protocol/VncProtocol.cs`
 - `server/src/VncServer.Core/Server/VncSession.cs`
 - `server/src/VncServer.Core/Server/VncServerHost.cs`
 - `server/src/VncServer.App/Program.cs`
-- `tests/VncServer.Tests/ProtocolFuzzingTests.cs`
-- `tests/VncServer.Tests/LoggingAndArchitectureTests.cs`
-- `client/app/src/main/java/com/thanhvnc/client/core/logging/AppLogger.kt`
-- `client/app/src/main/java/com/thanhvnc/client/core/logging/CrashHandler.kt`
-- `client/app/src/main/java/com/thanhvnc/client/domain/model/SessionStats.kt`
-- `client/app/src/main/java/com/thanhvnc/client/domain/usecase/ManageProfilesUseCase.kt`
-- `client/app/src/main/java/com/thanhvnc/client/ui/MainActivity.kt`
-- `client/app/src/test/java/com/thanhvnc/client/VncProtocolTest.kt`
+- `tests/VncServer.Tests/DxgiAndStreamingTests.cs`
+- `client/app/src/main/java/com/thanhvnc/client/protocol/VncMessages.kt`
+- `client/app/src/main/java/com/thanhvnc/client/protocol/VncProtocol.kt`
+- `client/app/src/main/java/com/thanhvnc/client/network/VncClient.kt`
+- `client/app/src/main/java/com/thanhvnc/client/ui/VncSurfaceView.kt`
 
 ## Next Action
 
-Implement Milestone M2: High-Performance DXGI Desktop Duplication API engine with GDI fallback, dirty rect extraction, and adaptive streaming presets.
+Implement Milestone M3: Mandatory TLS 1.3 encrypted transport, server certificate fingerprint pinning, PBKDF2 strong password derivation, progressive brute-force lockout, and `docs/SECURITY.md`.
 
 ## Resume Instructions
 
@@ -219,4 +230,4 @@ At the beginning of the next session:
 1. Read GEMINI.md.
 2. Read this file.
 3. Inspect Git status.
-4. Continue with Milestone M2 implementation.
+4. Continue with Milestone M3 implementation.

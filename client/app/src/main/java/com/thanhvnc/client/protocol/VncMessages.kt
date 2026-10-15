@@ -83,7 +83,13 @@ data class Heartbeat(val timestampMs: Long)
 
 data class DisconnectMessage(val reasonCode: Byte)
 
-data class QualityControl(val quality: Byte, val targetFps: Byte)
+enum class StreamingPreset(val value: Byte) {
+    BALANCED(0),
+    LOW_LATENCY(1),
+    HIGH_QUALITY(2)
+}
+
+data class QualityControl(val quality: Byte, val targetFps: Byte, val preset: Byte = 0)
 
 data class ClipboardMessage(val text: String)
 

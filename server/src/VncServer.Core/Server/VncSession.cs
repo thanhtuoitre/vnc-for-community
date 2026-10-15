@@ -176,7 +176,7 @@ public sealed class VncSession : IAsyncDisposable
                     var qc = VncProtocol.DeserializeQualityControl(payload);
                     _capture.SetQuality(qc.Quality);
                     _targetFps = Math.Clamp((int)qc.TargetFps, 5, 60);
-                    _logger?.Debug($"[{RemoteEndPoint}] Adaptive Quality: {qc.Quality}%, FPS: {_targetFps}");
+                    _logger?.Debug($"[{RemoteEndPoint}] Adaptive Quality: {qc.Quality}%, FPS: {_targetFps}, Preset: {(StreamingPreset)qc.Preset}");
                     break;
 
                 case VncMessageType.ClipboardText:

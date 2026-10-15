@@ -125,11 +125,12 @@ object VncProtocol {
 
     fun serializeDisconnect(msg: DisconnectMessage): ByteArray = byteArrayOf(msg.reasonCode)
 
-    fun serializeQualityControl(qc: QualityControl): ByteArray = byteArrayOf(qc.quality, qc.targetFps)
+    fun serializeQualityControl(qc: QualityControl): ByteArray = byteArrayOf(qc.quality, qc.targetFps, qc.preset)
 
     fun deserializeQualityControl(payload: ByteArray): QualityControl {
         require(payload.size >= 2) { "QualityControl payload too short" }
-        return QualityControl(payload[0], payload[1])
+        val preset = if (payload.size >= 3) payload[2] else 0.toByte()
+        return QualityControl(payload[0], payload[1], preset)
     }
 
     fun serializeClipboard(msg: ClipboardMessage): ByteArray = msg.text.toByteArray(Charsets.UTF_8)
