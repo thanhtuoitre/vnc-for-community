@@ -9,7 +9,9 @@ data class ServerProfile(
     var host: String,
     var port: Int = 5901,
     var password: String = "",
-    var lastConnectedMs: Long = 0L
+    var lastConnectedMs: Long = 0L,
+    var useTls: Boolean = true,
+    var expectedFingerprint: String = ""
 ) {
     fun toJson(): JSONObject {
         return JSONObject().apply {
@@ -19,6 +21,8 @@ data class ServerProfile(
             put("port", port)
             put("password", password)
             put("lastConnectedMs", lastConnectedMs)
+            put("useTls", useTls)
+            put("expectedFingerprint", expectedFingerprint)
         }
     }
 
@@ -30,7 +34,9 @@ data class ServerProfile(
                 host = json.optString("host", "127.0.0.1"),
                 port = json.optInt("port", 5901),
                 password = json.optString("password", ""),
-                lastConnectedMs = json.optLong("lastConnectedMs", 0L)
+                lastConnectedMs = json.optLong("lastConnectedMs", 0L),
+                useTls = json.optBoolean("useTls", true),
+                expectedFingerprint = json.optString("expectedFingerprint", "")
             )
         }
     }

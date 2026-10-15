@@ -17,6 +17,7 @@ Console.WriteLine("========================================");
 
 int port = 5901;
 string password = "vncsecret";
+bool useTls = true;
 
 for (int i = 0; i < args.Length; i++)
 {
@@ -38,9 +39,18 @@ for (int i = 0; i < args.Length; i++)
         VncServer.Core.Service.WindowsServiceHelper.ConfigureAutoStart(false);
         logger.Info("Disabled auto-start with Windows.");
     }
+    else if (args[i] == "--no-tls")
+    {
+        useTls = false;
+    }
 }
 
+var cert = useTls ? VncServer.Core.Security.CertificateManager.GetOrCreateServerCertificate(logger) : null;
+string fingerprint = cert != null ? VncServer.Core.Security.CertificateManager.GetSha256Fingerprint(cert) : "None (Plaintext)";
+
 logger.Info($"Server Port: {port}");
+logger.Info($"TLS Enabled: {useTls}");
+logger.Info($"Certificate: {fingerprint}");
 logger.Info($"Log File:    {logFile}");
 logger.Info("Local IPv4 Addresses:");
 
@@ -70,7 +80,7 @@ Console.CancelKeyPress += (s, e) =>
     cts.Cancel();
 };
 
-await using var server = new VncServerHost(port, password, 70, logger);
+await using var server = new VncServerHost(port, password, 70, logger, capture: null, serverCertificate: cert, useTls: useTls);
 server.Start();
 
 try

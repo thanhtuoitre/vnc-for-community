@@ -32,19 +32,22 @@ public sealed class VncSession : IAsyncDisposable
 
     public string RemoteEndPoint => _transport.RemoteEndPoint;
     public SessionState State { get; private set; } = SessionState.Connecting;
+    public SessionPermissions Permissions { get; set; } = SessionPermissions.FullControl;
 
     public VncSession(
         IVncTransport transport,
         IScreenCapture capture,
         string password,
         IVncLogger? logger = null,
-        Security.IpRateLimiter? rateLimiter = null)
+        Security.IpRateLimiter? rateLimiter = null,
+        SessionPermissions permissions = SessionPermissions.FullControl)
     {
         _transport = transport;
         _capture = capture;
         _password = password;
         _logger = logger;
         _rateLimiter = rateLimiter;
+        Permissions = permissions;
     }
 
     public VncSession(
@@ -120,6 +123,7 @@ public sealed class VncSession : IAsyncDisposable
 
         var handshakeReq = VncProtocol.DeserializeHandshakeRequest(payload);
         _logger?.Info($"[{RemoteEndPoint}] Handshake from '{handshakeReq.ClientName}' (v{handshakeReq.Version})");
+        Security.SessionAuditLogger.RecordEvent("HANDSHAKE", RemoteEndPoint, $"Client '{handshakeReq.ClientName}' (v{handshakeReq.Version})");
 
         // 2. Send HandshakeResponse
         byte[] challenge = VncProtocol.GenerateChallenge();
@@ -138,14 +142,20 @@ public sealed class VncSession : IAsyncDisposable
         if (_transport.RemoteAddress is IPAddress address)
         {
             if (isValid)
+            {
                 _rateLimiter?.RecordAuthSuccess(address);
+                Security.SessionAuditLogger.RecordEvent("AUTH_SUCCESS", RemoteEndPoint, $"Permissions: {Permissions}");
+            }
             else
+            {
                 _rateLimiter?.RecordAuthFailure(address);
+                Security.SessionAuditLogger.RecordEvent("AUTH_FAILURE", RemoteEndPoint, "Invalid HMAC challenge signature");
+            }
         }
 
         // 4. Send AuthResponse
         byte status = isValid ? (byte)0 : (byte)1;
-        await SendPacketAsync(VncMessageType.AuthResponse, VncProtocol.SerializeAuthResponse(new AuthResponse(status)), ct).ConfigureAwait(false);
+        await SendPacketAsync(VncMessageType.AuthResponse, VncProtocol.SerializeAuthResponse(new AuthResponse(status, (byte)Permissions)), ct).ConfigureAwait(false);
 
         return isValid;
     }
@@ -158,13 +168,19 @@ public sealed class VncSession : IAsyncDisposable
             switch (type)
             {
                 case VncMessageType.MouseInput:
-                    var mouse = VncProtocol.DeserializeMouseInput(payload);
-                    InputSimulator.SimulateMouse(mouse, _capture.Width, _capture.Height);
+                    if (Permissions.HasFlag(SessionPermissions.InputControl))
+                    {
+                        var mouse = VncProtocol.DeserializeMouseInput(payload);
+                        InputSimulator.SimulateMouse(mouse, _capture.Width, _capture.Height);
+                    }
                     break;
 
                 case VncMessageType.KeyboardInput:
-                    var kb = VncProtocol.DeserializeKeyboardInput(payload);
-                    InputSimulator.SimulateKeyboard(kb);
+                    if (Permissions.HasFlag(SessionPermissions.InputControl))
+                    {
+                        var kb = VncProtocol.DeserializeKeyboardInput(payload);
+                        InputSimulator.SimulateKeyboard(kb);
+                    }
                     break;
 
                 case VncMessageType.Heartbeat:
@@ -180,9 +196,12 @@ public sealed class VncSession : IAsyncDisposable
                     break;
 
                 case VncMessageType.ClipboardText:
-                    var clip = VncProtocol.DeserializeClipboard(payload);
-                    WindowsClipboard.SetText(clip.Text);
-                    _logger?.Info($"[{RemoteEndPoint}] Remote clipboard updated ({clip.Text.Length} chars).");
+                    if (Permissions.HasFlag(SessionPermissions.ClipboardSync))
+                    {
+                        var clip = VncProtocol.DeserializeClipboard(payload);
+                        WindowsClipboard.SetText(clip.Text);
+                        _logger?.Info($"[{RemoteEndPoint}] Remote clipboard updated ({clip.Text.Length} chars).");
+                    }
                     break;
 
                 case VncMessageType.Disconnect:

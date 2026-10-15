@@ -41,11 +41,29 @@ public sealed class IpRateLimiter
             lock (_lock)
             {
                 _authFailureCount++;
-                if (_authFailureCount >= maxFailures)
+                long durationTicks;
+                if (_authFailureCount >= 10)
                 {
-                    _blockedUntilTicks = nowTicks + blockTicks;
-                    _authFailureCount = 0;
+                    durationTicks = TimeSpan.FromHours(1).Ticks;
                 }
+                else if (_authFailureCount >= 5)
+                {
+                    durationTicks = TimeSpan.FromMinutes(5).Ticks;
+                }
+                else if (_authFailureCount >= maxFailures)
+                {
+                    durationTicks = blockTicks;
+                }
+                else if (_authFailureCount >= 3)
+                {
+                    durationTicks = TimeSpan.FromSeconds(30).Ticks;
+                }
+                else
+                {
+                    return;
+                }
+
+                _blockedUntilTicks = Math.Max(_blockedUntilTicks, nowTicks + durationTicks);
             }
         }
 

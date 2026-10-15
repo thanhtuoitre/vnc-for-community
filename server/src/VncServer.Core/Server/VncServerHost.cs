@@ -19,14 +19,25 @@ public sealed class VncServerHost : IAsyncDisposable
 
     public int Port { get; }
     public bool IsRunning { get; private set; }
+    public System.Security.Cryptography.X509Certificates.X509Certificate2? ServerCertificate { get; }
+    public bool UseTls { get; }
 
-    public VncServerHost(int port, string password, int captureQuality = 70, IVncLogger? logger = null, IScreenCapture? capture = null)
+    public VncServerHost(
+        int port,
+        string password,
+        int captureQuality = 70,
+        IVncLogger? logger = null,
+        IScreenCapture? capture = null,
+        System.Security.Cryptography.X509Certificates.X509Certificate2? serverCertificate = null,
+        bool useTls = false)
     {
         Port = port;
         _password = password;
         _logger = logger;
         _capture = capture ?? new HybridScreenCapture(captureQuality, logger);
         _listener = new TcpListener(IPAddress.Any, port);
+        ServerCertificate = serverCertificate;
+        UseTls = useTls || serverCertificate != null;
     }
 
     public VncServerHost(int port, string password, int captureQuality, Action<string>? log)
@@ -39,7 +50,7 @@ public sealed class VncServerHost : IAsyncDisposable
         if (IsRunning) return;
         _listener.Start();
         IsRunning = true;
-        _logger?.Info($"VNC Server listening on port {Port}...");
+        _logger?.Info($"VNC Server listening on port {Port} (TLS: {UseTls})...");
         _acceptTask = AcceptConnectionsAsync(_cts.Token);
     }
 
@@ -61,7 +72,15 @@ public sealed class VncServerHost : IAsyncDisposable
                     _rateLimiter.RecordConnection(ep.Address);
                 }
 
-                var transport = new Transport.TcpVncTransport(tcpClient);
+                Transport.IVncTransport transport;
+                if (UseTls && ServerCertificate != null)
+                {
+                    transport = await Transport.TlsVncTransport.AuthenticateAsServerAsync(tcpClient, ServerCertificate, ct).ConfigureAwait(false);
+                }
+                else
+                {
+                    transport = new Transport.TcpVncTransport(tcpClient);
+                }
                 var session = new VncSession(transport, _capture, _password, _logger, _rateLimiter);
                 _sessions.TryAdd(session, 0);
 

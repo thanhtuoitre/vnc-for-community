@@ -50,7 +50,18 @@ public sealed record HandshakeResponse(byte Version, byte[] Challenge, int Scree
 
 public sealed record AuthRequest(byte[] HmacSignature);
 
-public sealed record AuthResponse(byte StatusCode); // 0 = Success, 1 = InvalidAuth, 2 = ProtocolError
+[Flags]
+public enum SessionPermissions : byte
+{
+    None = 0,
+    ViewOnly = 1 << 0,
+    InputControl = 1 << 1,
+    ClipboardSync = 1 << 2,
+    FileTransfer = 1 << 3,
+    FullControl = ViewOnly | InputControl | ClipboardSync | FileTransfer
+}
+
+public sealed record AuthResponse(byte StatusCode, byte Permissions = (byte)SessionPermissions.FullControl); // 0 = Success, 1 = InvalidAuth, 2 = ProtocolError
 
 public sealed record ScreenFrame(
     uint FrameIndex,

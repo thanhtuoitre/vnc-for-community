@@ -118,13 +118,14 @@ public static class VncProtocol
         return new AuthRequest(sig);
     }
 
-    public static byte[] SerializeAuthResponse(AuthResponse res) => [res.StatusCode];
+    public static byte[] SerializeAuthResponse(AuthResponse res) => [res.StatusCode, res.Permissions];
 
     public static AuthResponse DeserializeAuthResponse(ReadOnlySpan<byte> payload)
     {
         if (payload.IsEmpty)
             throw new FormatException("Auth response payload empty");
-        return new AuthResponse(payload[0]);
+        byte permissions = payload.Length >= 2 ? payload[1] : (byte)SessionPermissions.FullControl;
+        return new AuthResponse(payload[0], permissions);
     }
 
     public static byte[] SerializeScreenFrame(ScreenFrame frame)

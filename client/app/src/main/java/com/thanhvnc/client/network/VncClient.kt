@@ -58,8 +58,19 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
         private set
     var screenHeight: Int = 1080
         private set
+    var activeFingerprint: String = ""
+        private set
+    var grantedPermissions: Byte = SessionPermissions.FULL_CONTROL
+        private set
 
-    fun connect(host: String, port: Int, password: String, autoReconnect: Boolean = true) {
+    fun connect(
+        host: String,
+        port: Int,
+        password: String,
+        autoReconnect: Boolean = true,
+        useTls: Boolean = false,
+        expectedFingerprint: String = ""
+    ) {
         disconnect()
         isManualDisconnect = false
 
@@ -70,7 +81,7 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
             while (isActive && !isManualDisconnect) {
                 try {
                     _state.value = if (attempt == 1) VncConnectionState.Connecting else VncConnectionState.Reconnecting(attempt, 0)
-                    runSession(host, port, password)
+                    runSession(host, port, password, useTls, expectedFingerprint)
                     attempt = 1
                     backoffMs = 1000L
                 } catch (e: CancellationException) {
@@ -98,10 +109,49 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
         }
     }
 
-    private suspend fun runSession(host: String, port: Int, password: String) = coroutineScope {
-        val s = Socket()
-        s.tcpNoDelay = true
-        s.connect(InetSocketAddress(host, port), 5000)
+    private suspend fun runSession(
+        host: String,
+        port: Int,
+        password: String,
+        useTls: Boolean = false,
+        expectedFingerprint: String = ""
+    ) = coroutineScope {
+        val s = if (useTls) {
+            val sslContext = javax.net.ssl.SSLContext.getInstance("TLS")
+            var certFingerprint = ""
+            val trustManager = object : javax.net.ssl.X509TrustManager {
+                override fun checkClientTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
+                override fun checkServerTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {
+                    if (chain.isNullOrEmpty()) throw java.security.cert.CertificateException("Empty TLS certificate chain")
+                    val md = java.security.MessageDigest.getInstance("SHA-256")
+                    val hash = md.digest(chain[0].encoded)
+                    certFingerprint = hash.joinToString(":") { "%02X".format(it) }
+
+                    if (expectedFingerprint.isNotBlank()) {
+                        val normExp = expectedFingerprint.replace("-", ":").uppercase()
+                        val normAct = certFingerprint.uppercase()
+                        if (normExp != normAct) {
+                            throw java.security.cert.CertificateException("TLS Certificate Fingerprint Mismatch! Expected: $normExp, Actual: $normAct")
+                        }
+                    }
+                }
+                override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
+            }
+            sslContext.init(null, arrayOf(trustManager), java.security.SecureRandom())
+            val rawSocket = Socket()
+            rawSocket.tcpNoDelay = true
+            rawSocket.connect(InetSocketAddress(host, port), 5000)
+            val sslSocket = sslContext.socketFactory.createSocket(rawSocket, host, port, true) as javax.net.ssl.SSLSocket
+            sslSocket.enabledProtocols = arrayOf("TLSv1.3", "TLSv1.2")
+            sslSocket.startHandshake()
+            activeFingerprint = certFingerprint
+            sslSocket
+        } else {
+            val raw = Socket()
+            raw.tcpNoDelay = true
+            raw.connect(InetSocketAddress(host, port), 5000)
+            raw
+        }
         socket = s
 
         val inputStream = BufferedInputStream(s.getInputStream())
@@ -134,6 +184,7 @@ class VncClient(private val clientScope: CoroutineScope = CoroutineScope(Dispatc
         if (authRes.statusCode.toInt() != 0) {
             throw SecurityException("Authentication rejected by server (code ${authRes.statusCode})")
         }
+        grantedPermissions = authRes.permissions
 
         _state.value = VncConnectionState.Connected(screenWidth, screenHeight)
 

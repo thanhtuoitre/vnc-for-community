@@ -71,7 +71,7 @@ class MainActivity : AppCompatActivity() {
         adapter = ServerProfileAdapter(
             onConnect = { profile ->
                 activeProfileId = profile.id
-                connectToServer(profile.host, profile.port, profile.password)
+                connectToServer(profile.host, profile.port, profile.password, profile.useTls, profile.expectedFingerprint)
             },
             onEdit = { profile ->
                 showEditServerDialog(profile)
@@ -368,10 +368,16 @@ class MainActivity : AppCompatActivity() {
         popup.show()
     }
 
-    private fun connectToServer(host: String, port: Int, password: String) {
-        binding.textConnectingHost.text = "$host:$port"
+    private fun connectToServer(
+        host: String,
+        port: Int,
+        password: String,
+        useTls: Boolean = false,
+        expectedFingerprint: String = ""
+    ) {
+        binding.textConnectingHost.text = if (useTls) "$host:$port (TLS)" else "$host:$port"
         binding.layoutConnectingProgress.visibility = View.VISIBLE
-        client.connect(host, port, password)
+        client.connect(host, port, password, useTls = useTls, expectedFingerprint = expectedFingerprint)
     }
 
     private fun showEditServerDialog(existing: ServerProfile?) {
@@ -460,6 +466,12 @@ class MainActivity : AppCompatActivity() {
 
                         activeProfileId?.let { id ->
                             repository.updateLastConnected(id)
+                            val p = repository.getAllProfiles().find { it.id == id }
+                            if (p != null && client.activeFingerprint.isNotEmpty() && p.expectedFingerprint.isEmpty()) {
+                                p.expectedFingerprint = client.activeFingerprint
+                                repository.saveProfile(p)
+                                com.thanhvnc.client.core.logging.AppLogger.i("Pinned TLS certificate fingerprint for ${p.name}: ${client.activeFingerprint}")
+                            }
                             refreshServerList()
                         }
 

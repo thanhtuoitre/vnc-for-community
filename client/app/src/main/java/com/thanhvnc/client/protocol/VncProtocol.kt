@@ -69,9 +69,12 @@ object VncProtocol {
         return buf.array()
     }
 
+    fun serializeAuthResponse(res: AuthResponse): ByteArray = byteArrayOf(res.statusCode, res.permissions)
+
     fun deserializeAuthResponse(payload: ByteArray): AuthResponse {
         require(payload.isNotEmpty()) { "Auth response empty" }
-        return AuthResponse(payload[0])
+        val permissions = if (payload.size >= 2) payload[1] else SessionPermissions.FULL_CONTROL
+        return AuthResponse(payload[0], permissions)
     }
 
     fun deserializeScreenFrame(payload: ByteArray): ScreenFrame {

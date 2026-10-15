@@ -188,9 +188,38 @@ Build a working, low-latency Windows VNC Server and Android VNC Client.
     - 23 client unit tests passing (100%).
     - Full automated verification script `scripts\test-all.bat` passes cleanly.
 
+- **Production Milestone M3 — Security & End-to-End Encryption:**
+  - Mandatory TLS 1.3/1.2 Encrypted Transport:
+    - Native `TlsVncTransport.cs` wrapping `SslStream` with server certificate authentication.
+    - Android client `VncClient.kt` natively negotiating TLS 1.3 / TLS 1.2 with X.509 certificate validation.
+  - Server Certificate Provisioning & TOFU Fingerprint Pinning:
+    - `CertificateManager.cs` dynamically generates and caches self-signed 2048-bit RSA X.509 certificates in `%LOCALAPPDATA%\ThanhVNC\certs\server.pfx`.
+    - Android client computes SHA-256 fingerprint on handshake, verifies against stored fingerprint with Trust-On-First-Use (TOFU) pinning, preventing MITM attacks.
+    - Configurable TLS enforcement (`useTls`, `expectedFingerprint`) persisted in `ServerProfile`.
+  - Cryptographic Hardening & Password Derivation:
+    - `PasswordHasher.cs` implements PBKDF2 with SHA-256, 100,000 iterations, 16-byte random salt, and constant-time signature comparison (`CryptographicOperations.FixedTimeEquals`).
+    - Zero plaintext passwords in memory or logs.
+  - Progressive Brute-Force Lockout Defense:
+    - `IpRateLimiter.cs` enforces sliding-window tracking with escalating lockouts: 3 failed attempts = 30s lockout; 5 failed attempts = 5m lockout; 10 failed attempts = 1h lockout.
+  - Granular Session Permissions:
+    - `SessionPermissions` bitmask (`ViewOnly`, `InputControl`, `ClipboardSync`, `FileTransfer`, `FullControl`).
+    - Server verifies permissions on mouse/keyboard/clipboard/audio packets; `AuthResponse` returns granted permissions to client.
+  - Non-Volatile Session Audit Logging:
+    - `SessionAuditLogger.cs` logs all connection, authentication, disconnect, and lockout events to `%LOCALAPPDATA%\ThanhVNC\logs\audit.log` with timestamp, client IP, and duration.
+  - Security Architecture & Threat Model:
+    - Comprehensive `docs/SECURITY.md` detailing protocol security, key management, threat mitigations, and compliance checklist.
+  - Test verification:
+    - 81 server unit/integration tests passing (100%).
+    - 23 client unit tests passing (100%).
+    - Full automated verification script `scripts\test-all.bat` passes cleanly.
+
 ## In Progress
 
-- Production Milestone M3 — Security & End-to-End Encryption (TLS 1.3 encrypted transport with certificate fingerprint pinning, strong PBKDF2 password derivation, progressive lockout, view-only/full-control permissions, session audit logging, and `docs/SECURITY.md`).
+- Production Milestone M4 — LAN Discovery & WAN Resilience:
+  - Zero-config LAN desktop discovery via UDP broadcast / mDNS on Windows Server and Android Client.
+  - Smart reconnection with dynamic exponential backoff and Wi-Fi ↔ 4G transition handling.
+  - Rapid dead-connection detection and session state recovery token.
+  - UPnP automatic port mapping on Windows Server for seamless WAN reachability.
 
 ## Known Problems
 
@@ -199,30 +228,34 @@ None.
 ## Tests
 
 - Full automated suite: `scripts\test-all.bat` — ALL TESTS & BUILDS PASSED.
-- Windows Server Tests: `dotnet test server/VncServer.sln -c Release` — 76 passed, 0 failed, 0 skipped (881 ms).
+- Windows Server Tests: `dotnet test server/VncServer.sln -c Release` — 81 passed, 0 failed, 0 skipped (~917 ms).
 - Android Client Tests: `gradlew test` (in `client/`) — 23 passed, 0 failed, 0 skipped (Debug + Release unit test passes).
 - Android APK Assembly: `gradlew assembleDebug` (in `client/`) — BUILD SUCCESSFUL (output: `dist/ThanhVNC.apk`).
 
 ## Changed Files
 
 - `PROJECT_STATUS.md`
-- `server/src/VncServer.Core/Capture/DxgiDesktopCapture.cs`
-- `server/src/VncServer.Core/Capture/HybridScreenCapture.cs`
-- `server/src/VncServer.Core/Service/WindowsServiceHelper.cs`
+- `docs/SECURITY.md`
+- `server/src/VncServer.Core/Security/CertificateManager.cs`
+- `server/src/VncServer.Core/Security/PasswordHasher.cs`
+- `server/src/VncServer.Core/Security/SessionAuditLogger.cs`
+- `server/src/VncServer.Core/Security/IpRateLimiter.cs`
+- `server/src/VncServer.Core/Transport/TlsVncTransport.cs`
 - `server/src/VncServer.Core/Protocol/VncMessages.cs`
 - `server/src/VncServer.Core/Protocol/VncProtocol.cs`
 - `server/src/VncServer.Core/Server/VncSession.cs`
 - `server/src/VncServer.Core/Server/VncServerHost.cs`
 - `server/src/VncServer.App/Program.cs`
-- `tests/VncServer.Tests/DxgiAndStreamingTests.cs`
+- `tests/VncServer.Tests/SecurityTests.cs`
 - `client/app/src/main/java/com/thanhvnc/client/protocol/VncMessages.kt`
 - `client/app/src/main/java/com/thanhvnc/client/protocol/VncProtocol.kt`
 - `client/app/src/main/java/com/thanhvnc/client/network/VncClient.kt`
-- `client/app/src/main/java/com/thanhvnc/client/ui/VncSurfaceView.kt`
+- `client/app/src/main/java/com/thanhvnc/client/model/ServerProfile.kt`
+- `client/app/src/main/java/com/thanhvnc/client/ui/MainActivity.kt`
 
 ## Next Action
 
-Implement Milestone M3: Mandatory TLS 1.3 encrypted transport, server certificate fingerprint pinning, PBKDF2 strong password derivation, progressive brute-force lockout, and `docs/SECURITY.md`.
+Implement Milestone M4: Zero-config UDP LAN discovery, smart Wi-Fi/cellular reconnection, rapid dead-connection detection, and UPnP WAN port forwarding.
 
 ## Resume Instructions
 
@@ -230,4 +263,4 @@ At the beginning of the next session:
 1. Read GEMINI.md.
 2. Read this file.
 3. Inspect Git status.
-4. Continue with Milestone M3 implementation.
+4. Continue with Milestone M4 implementation.
